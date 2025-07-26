@@ -4,6 +4,8 @@ LINEのトーク履歴を分析・可視化するWebアプリケーションで�
 
 🌐 **デプロイ版**: https://line-talk-viewer-qy6nsvlg2nwdgfutymga6j.streamlit.app/
 
+📂 **GitHub**: https://github.com/ryouyuu/line-talk-viewer
+
 ## 🌟 主な機能
 
 ### 📊 基本機能
@@ -53,8 +55,8 @@ LINEのトーク履歴を分析・可視化するWebアプリケーションで�
 
 ```bash
 # リポジトリをクローン
-git clone https://github.com/yourusername/chatviz.git
-cd chatviz
+git clone https://github.com/ryouyuu/line-talk-viewer.git
+cd ltv
 
 # 依存関係のインストール
 pip install -r requirements.txt
@@ -165,7 +167,7 @@ pip install -r requirements-streamlit.txt
 ## 📋 プロジェクト構造
 
 ```
-chatviz/
+ltv/
 ├── main.py                    # メインアプリケーション
 ├── parser.py                  # LINEファイル解析・参加者自動特定
 ├── analyzer.py                # 分析機能（感情・頻出ワード・返信速度）
