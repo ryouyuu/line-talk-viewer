@@ -1,6 +1,6 @@
 streamlit>=1.28.0
 transformers>=4.35.0
-torch>=2.0.0+cpu
+torch>=2.5.0
 fugashi>=1.5.0
 ipadic>=1.0.0
 janome>=0.4.2
