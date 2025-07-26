@@ -641,7 +641,13 @@ class ConversationAnalyzer:
             }
         
         # 時間帯別の送信速度分析
-        df['hour'] = pd.to_datetime(df['time'], format='%H:%M').dt.hour
+        try:
+            df['hour'] = pd.to_datetime(df['time'], format='%H:%M').dt.hour
+        except Exception as e:
+            logger.warning(f"時間形式の解析エラー: {e}")
+            # フォールバック: 文字列から時間を抽出
+            df['hour'] = df['time'].str.extract(r'(\d{1,2}):').astype(int)
+        
         hourly_speeds = {}
         
         for hour in range(24):
@@ -706,10 +712,14 @@ class ConversationAnalyzer:
         if df.empty:
             return {}
         
-        # 日付をdatetimeに変換
-        df['datetime'] = pd.to_datetime(df['date'])
-        df['month'] = df['datetime'].dt.month
-        df['weekday'] = df['datetime'].dt.dayofweek
+        try:
+            # 日付をdatetimeに変換
+            df['datetime'] = pd.to_datetime(df['date'])
+            df['month'] = df['datetime'].dt.month
+            df['weekday'] = df['datetime'].dt.dayofweek
+        except Exception as e:
+            logger.error(f"季節性分析での日付変換エラー: {e}")
+            return {}
         
         # 月別統計
         monthly_stats = df.groupby('month').agg({
@@ -765,7 +775,7 @@ class ConversationAnalyzer:
             'メッセージ長統計': length_stats,
             '絵文字・スタンプ統計': emoji_stats,
             '返信速度統計': response_stats,
-            '返信速度統計': speed_stats,
+            '送信速度統計': speed_stats,
             '季節性統計': seasonal_stats
         }
 

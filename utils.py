@@ -1092,7 +1092,7 @@ def display_advanced_stats(df: pd.DataFrame, own_name: str) -> None:
         st.info("**送信速度**: メッセージの送信間隔と会話のテンポを分析します")
         
         # 全体統計
-        speed_stats = summary['返信速度統計']['全体統計']
+        speed_stats = summary['送信速度統計']['全体統計']
         st.info(f"**会話テンポレベル: {speed_stats['会話テンポレベル']}**")
         
         col1, col2, col3, col4 = st.columns(4)
@@ -1107,17 +1107,17 @@ def display_advanced_stats(df: pd.DataFrame, own_name: str) -> None:
         
         # 発言者別送信速度
         st.subheader("👥 発言者別送信速度")
-        speed_chart = create_message_speed_chart(summary['返信速度統計'])
+        speed_chart = create_message_speed_chart(summary['送信速度統計'])
         st.plotly_chart(speed_chart, use_container_width=True)
         
         # 時間帯別送信速度
         st.subheader("⏰ 時間帯別送信速度")
-        hourly_speed_chart = create_hourly_speed_chart(summary['返信速度統計'])
+        hourly_speed_chart = create_hourly_speed_chart(summary['送信速度統計'])
         st.plotly_chart(hourly_speed_chart, use_container_width=True)
         
         # 発言者別詳細統計
         st.subheader("📊 発言者別詳細統計")
-        speaker_speeds = summary['返信速度統計']['発言者別速度']
+        speaker_speeds = summary['送信速度統計']['発言者別速度']
         for speaker, stats in speaker_speeds.items():
             with st.expander(f"**{speaker}** - {stats['送信速度レベル']}"):
                 col1, col2, col3, col4 = st.columns(4)
