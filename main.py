@@ -351,12 +351,10 @@ def main():
         if speakers:
             st.info(f"**参加者一覧:** {', '.join(speakers)}")
             
-            # 参加者選択ボタン
-            if st.button("参加者から選択"):
-                selected_speaker = st.selectbox("参加者を選択", speakers)
-                if selected_speaker:
-                    st.session_state['selected_speaker'] = selected_speaker
-                    st.rerun()
+            # 参加者選択
+            selected_speaker = st.selectbox("参加者から選択", [""] + speakers, help="自分の名前を選択すると、名前入力欄に自動入力されます")
+            if selected_speaker:
+                st.session_state['selected_speaker'] = selected_speaker
         
         # GPT API設定を削除
         pass
