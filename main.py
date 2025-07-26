@@ -501,7 +501,7 @@ def main():
                     # モバイル用の分析選択
                     analysis_type = st.selectbox(
                         "分析タイプを選択",
-                        ["基本統計", "感情分析", "頻出ワード", "変身速度", "高度な分析"]
+                        ["基本統計", "感情分析", "頻出ワード", "返信速度", "高度な分析"]
                     )
                     
                     if analysis_type == "基本統計":
@@ -510,7 +510,7 @@ def main():
                         display_emotion_analysis(df)
                     elif analysis_type == "頻出ワード":
                         display_word_analysis(df, own_name)
-                    elif analysis_type == "変身速度":
+                    elif analysis_type == "返信速度":
                         display_message_speed_analysis(df, own_name)
                     elif analysis_type == "高度な分析":
                         display_advanced_stats(df, own_name)
@@ -770,7 +770,7 @@ def display_analysis_tab(df: pd.DataFrame, own_name: str):
     # 分析オプション
     analysis_type = st.selectbox(
         "分析タイプを選択",
-        ["感情分析", "頻出ワード分析", "高度な会話分析", "変身速度分析"]
+        ["感情分析", "頻出ワード分析", "高度な会話分析", "返信速度分析"]
     )
     
     if analysis_type == "感情分析":
@@ -782,7 +782,7 @@ def display_analysis_tab(df: pd.DataFrame, own_name: str):
     elif analysis_type == "高度な会話分析":
         display_advanced_stats(df, own_name)
     
-    elif analysis_type == "変身速度分析":
+    elif analysis_type == "返信速度分析":
         display_message_speed_analysis(df, own_name)
 
 def display_emotion_analysis(df: pd.DataFrame):
@@ -912,18 +912,18 @@ def display_word_analysis(df: pd.DataFrame, own_name: str):
             st.warning("頻出ワードが見つかりませんでした")
 
 def display_message_speed_analysis(df: pd.DataFrame, own_name: str):
-    """変身速度分析表示"""
-    st.subheader("🚀 変身速度分析")
+    """返信速度分析表示"""
+    st.subheader("🚀 返信速度分析")
     
     st.info("""
-    **変身速度分析について**
+    **返信速度分析について**
     - メッセージの送信間隔を分析して、会話のテンポを測定します
     - 発言者別の送信速度レベルを判定します
     - 時間帯別の送信速度パターンを可視化します
     """)
     
     # 分析実行
-    with st.spinner("変身速度を分析中..."):
+    with st.spinner("返信速度を分析中..."):
         from analyzer import ConversationAnalyzer
         analyzer = ConversationAnalyzer()
         speed_stats = analyzer.analyze_message_speed(df)
@@ -957,8 +957,8 @@ def display_message_speed_analysis(df: pd.DataFrame, own_name: str):
         with col4:
             st.metric("総メッセージ数", f"{overall_stats['総メッセージ数']}件")
         
-        # 発言者別変身速度
-        st.subheader("👥 発言者別変身速度")
+        # 発言者別返信速度
+        st.subheader("👥 発言者別返信速度")
         from utils import create_message_speed_chart
         speed_chart = create_message_speed_chart(speed_stats)
         st.plotly_chart(speed_chart, use_container_width=True)
@@ -990,8 +990,8 @@ def display_message_speed_analysis(df: pd.DataFrame, own_name: str):
                     with col4:
                         st.metric("連続メッセージ数", f"{stats['連続メッセージ数']}件")
         
-        # 時間帯別変身速度
-        st.subheader("⏰ 時間帯別変身速度")
+        # 時間帯別返信速度
+        st.subheader("⏰ 時間帯別返信速度")
         from utils import create_hourly_speed_chart
         hourly_speed_chart = create_hourly_speed_chart(speed_stats)
         st.plotly_chart(hourly_speed_chart, use_container_width=True)
@@ -1024,7 +1024,7 @@ def display_message_speed_analysis(df: pd.DataFrame, own_name: str):
             - 時間をかけて返信
             """)
     else:
-        st.warning("変身速度分析に失敗しました")
+        st.warning("返信速度分析に失敗しました")
 
 # トピック要約機能を削除
 

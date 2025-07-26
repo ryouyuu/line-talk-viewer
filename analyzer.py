@@ -572,13 +572,13 @@ class ConversationAnalyzer:
     
     def analyze_message_speed(self, df: pd.DataFrame) -> Dict[str, Dict]:
         """
-        変身速度分析（メッセージ送信速度分析）
+        返信速度分析（メッセージ送信速度分析）
         
         Args:
             df: メッセージDataFrame
             
         Returns:
-            変身速度統計
+            返信速度統計
         """
         if df.empty:
             return {}
@@ -765,7 +765,7 @@ class ConversationAnalyzer:
             'メッセージ長統計': length_stats,
             '絵文字・スタンプ統計': emoji_stats,
             '返信速度統計': response_stats,
-            '変身速度統計': speed_stats,
+            '返信速度統計': speed_stats,
             '季節性統計': seasonal_stats
         }
 

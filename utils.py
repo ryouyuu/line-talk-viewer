@@ -723,11 +723,11 @@ def create_response_time_chart(response_stats: Dict[str, Dict]) -> go.Figure:
     return fig
 
 def create_message_speed_chart(speed_stats: Dict[str, Dict]) -> go.Figure:
-    """変身速度分析のグラフを作成"""
+    """返信速度分析のグラフを作成"""
     if not speed_stats or '発言者別速度' not in speed_stats:
         fig = go.Figure()
         fig.add_annotation(
-            text="変身速度データがありません",
+            text="返信速度データがありません",
             xref="paper", yref="paper",
             x=0.5, y=0.5, showarrow=False
         )
@@ -778,7 +778,7 @@ def create_message_speed_chart(speed_stats: Dict[str, Dict]) -> go.Figure:
     ))
     
     fig.update_layout(
-        title="🚀 変身速度分析（メッセージ送信速度）",
+        title="🚀 返信速度分析（メッセージ送信速度）",
         xaxis_title="発言者",
         yaxis=dict(title="平均送信間隔（分）", side="left"),
         yaxis2=dict(title="連続メッセージ数", side="right", overlaying="y"),
@@ -789,7 +789,7 @@ def create_message_speed_chart(speed_stats: Dict[str, Dict]) -> go.Figure:
     return fig
 
 def create_hourly_speed_chart(speed_stats: Dict[str, Dict]) -> go.Figure:
-    """時間帯別変身速度のグラフを作成"""
+    """時間帯別返信速度のグラフを作成"""
     if not speed_stats or '時間帯別速度' not in speed_stats:
         fig = go.Figure()
         fig.add_annotation(
@@ -841,7 +841,7 @@ def create_hourly_speed_chart(speed_stats: Dict[str, Dict]) -> go.Figure:
     ))
     
     fig.update_layout(
-        title="⏰ 時間帯別変身速度",
+        title="⏰ 時間帯別返信速度",
         xaxis_title="時間",
         yaxis=dict(title="平均送信間隔（分）", side="left"),
         yaxis2=dict(title="メッセージ数", side="right", overlaying="y"),
@@ -1022,7 +1022,7 @@ def display_advanced_stats(df: pd.DataFrame, own_name: str) -> None:
         "📏 メッセージ長", 
         "😊 絵文字分析", 
         "⚡ 返信速度", 
-        "🚀 変身速度",
+        "🚀 返信速度",
         "📅 季節性"
     ])
     
@@ -1086,10 +1086,10 @@ def display_advanced_stats(df: pd.DataFrame, own_name: str) -> None:
             st.metric("返信回数", f"{response_stats['返信回数']}回")
     
     with tab5:
-        st.subheader("🚀 変身速度分析")
+        st.subheader("🚀 返信速度分析")
         
         # 全体統計
-        speed_stats = summary['変身速度統計']['全体統計']
+        speed_stats = summary['返信速度統計']['全体統計']
         st.info(f"**会話テンポレベル: {speed_stats['会話テンポレベル']}**")
         
         col1, col2, col3, col4 = st.columns(4)
@@ -1102,19 +1102,19 @@ def display_advanced_stats(df: pd.DataFrame, own_name: str) -> None:
         with col4:
             st.metric("総メッセージ数", f"{speed_stats['総メッセージ数']}件")
         
-        # 発言者別変身速度
-        st.subheader("👥 発言者別変身速度")
-        speed_chart = create_message_speed_chart(summary['変身速度統計'])
+        # 発言者別返信速度
+        st.subheader("👥 発言者別返信速度")
+        speed_chart = create_message_speed_chart(summary['返信速度統計'])
         st.plotly_chart(speed_chart, use_container_width=True)
         
-        # 時間帯別変身速度
-        st.subheader("⏰ 時間帯別変身速度")
-        hourly_speed_chart = create_hourly_speed_chart(summary['変身速度統計'])
+        # 時間帯別返信速度
+        st.subheader("⏰ 時間帯別返信速度")
+        hourly_speed_chart = create_hourly_speed_chart(summary['返信速度統計'])
         st.plotly_chart(hourly_speed_chart, use_container_width=True)
         
         # 発言者別詳細統計
         st.subheader("📊 発言者別詳細統計")
-        speaker_speeds = summary['変身速度統計']['発言者別速度']
+        speaker_speeds = summary['返信速度統計']['発言者別速度']
         for speaker, stats in speaker_speeds.items():
             with st.expander(f"**{speaker}** - {stats['送信速度レベル']}"):
                 col1, col2, col3, col4 = st.columns(4)
