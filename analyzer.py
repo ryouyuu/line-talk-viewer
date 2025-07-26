@@ -17,19 +17,9 @@ class EmotionAnalyzer:
     
     def __init__(self):
         """感情分析器を初期化"""
-        try:
-            from transformers import pipeline
-            # 軽量な感情分析モデルを使用
-            self.sentiment_analyzer = pipeline(
-                "sentiment-analysis",
-                model="nlptown/bert-base-multilingual-uncased-sentiment",
-                device=-1  # CPU使用（GPUがある場合は0に変更）
-            )
-            self.model_loaded = True
-            logger.info("軽量感情分析モデルを読み込みました")
-        except Exception as e:
-            logger.warning(f"感情分析モデルの読み込みに失敗: {e}")
-            self.model_loaded = False
+        self.model_loaded = False
+        self.sentiment_analyzer = None
+        logger.info("感情分析モデルは必要時に読み込みます")
     
     def analyze_text(self, text: str) -> Dict[str, float]:
         """
@@ -76,6 +66,21 @@ class EmotionAnalyzer:
         """
         if df.empty:
             return df
+        
+        # 感情分析モデルを必要時に読み込み
+        if not self.model_loaded:
+            try:
+                from transformers import pipeline
+                self.sentiment_analyzer = pipeline(
+                    "sentiment-analysis",
+                    model="nlptown/bert-base-multilingual-uncased-sentiment",
+                    device=-1  # CPU使用
+                )
+                self.model_loaded = True
+                logger.info("感情分析モデルを読み込みました")
+            except Exception as e:
+                logger.warning(f"感情分析モデルの読み込みに失敗: {e}")
+                self.model_loaded = False
         
         # システムメッセージを除外
         message_df = df[df['type'] != 'system'].copy()
