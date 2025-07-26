@@ -1021,8 +1021,8 @@ def display_advanced_stats(df: pd.DataFrame, own_name: str) -> None:
         "⏰ 時間帯分析", 
         "📏 メッセージ長", 
         "😊 絵文字分析", 
-        "⚡ 返信速度", 
-        "🚀 返信速度",
+        "⚡ 返信時間", 
+        "🚀 送信速度",
         "📅 季節性"
     ])
     
@@ -1071,7 +1071,9 @@ def display_advanced_stats(df: pd.DataFrame, own_name: str) -> None:
             st.metric("絵文字総数", f"{emoji_stats['絵文字総数']}個")
     
     with tab4:
-        st.subheader("⚡ 返信速度分析")
+        st.subheader("⚡ 返信時間分析")
+        st.info("**返信時間**: 相手のメッセージに対する返信にかかった時間を分析します")
+        
         response_chart = create_response_time_chart(summary['返信速度統計'])
         st.plotly_chart(response_chart, use_container_width=True)
         
@@ -1086,7 +1088,8 @@ def display_advanced_stats(df: pd.DataFrame, own_name: str) -> None:
             st.metric("返信回数", f"{response_stats['返信回数']}回")
     
     with tab5:
-        st.subheader("🚀 返信速度分析")
+        st.subheader("🚀 送信速度分析")
+        st.info("**送信速度**: メッセージの送信間隔と会話のテンポを分析します")
         
         # 全体統計
         speed_stats = summary['返信速度統計']['全体統計']
@@ -1102,13 +1105,13 @@ def display_advanced_stats(df: pd.DataFrame, own_name: str) -> None:
         with col4:
             st.metric("総メッセージ数", f"{speed_stats['総メッセージ数']}件")
         
-        # 発言者別返信速度
-        st.subheader("👥 発言者別返信速度")
+        # 発言者別送信速度
+        st.subheader("👥 発言者別送信速度")
         speed_chart = create_message_speed_chart(summary['返信速度統計'])
         st.plotly_chart(speed_chart, use_container_width=True)
         
-        # 時間帯別返信速度
-        st.subheader("⏰ 時間帯別返信速度")
+        # 時間帯別送信速度
+        st.subheader("⏰ 時間帯別送信速度")
         hourly_speed_chart = create_hourly_speed_chart(summary['返信速度統計'])
         st.plotly_chart(hourly_speed_chart, use_container_width=True)
         
