@@ -316,8 +316,16 @@ def main():
     if 'is_mobile' not in st.session_state:
         st.session_state['is_mobile'] = True  # デフォルトでモバイル対応
     
+    # アプリケーション説明
+    st.markdown("""
+    **ChatViz** は、LINEのトーク履歴を分析・可視化するツールです。
+    
+    📱 **モバイル対応** | 🔍 **高度な検索** | 📊 **詳細分析** | 😊 **感情分析**
+    """)
+    
     # ヘッダー
-    st.title("💬 LINEトーク履歴ビジュアライザー")
+    st.title("💬 ChatViz")
+    st.markdown("*LINEトーク履歴の分析・可視化ツール*")
     st.markdown("---")
     
     # サイドバー設定

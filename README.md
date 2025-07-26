@@ -1,4 +1,4 @@
-# 💬 LINEトーク履歴ビジュアライザー
+# 💬 ChatViz
 
 LINEのトーク履歴を分析・可視化するWebアプリケーションです。
 
@@ -28,7 +28,7 @@ LINEのトーク履歴を分析・可視化するWebアプリケーションで�
    ```bash
    git add .
    git commit -m "Initial commit"
-   git remote add origin https://github.com/yourusername/line-talk-viewer.git
+   git remote add origin https://github.com/yourusername/chatviz.git
    git push -u origin main
    ```
 
@@ -54,7 +54,7 @@ LINEのトーク履歴を分析・可視化するWebアプリケーションで�
 ## 📋 必要なファイル
 
 ```
-ltv/
+chatviz/
 ├── main.py              # メインアプリケーション
 ├── parser.py            # LINEファイル解析
 ├── analyzer.py          # 分析機能
@@ -119,4 +119,8 @@ MIT License
 
 ---
 
-**注意**: このアプリケーションは個人利用を目的としています。商用利用の際は適切なライセンス確認をお願いします。 
+**注意**: このアプリケーションは個人利用を目的としています。商用利用の際は適切なライセンス確認をお願いします。
+
+---
+
+**ChatViz** - LINEトーク履歴の分析・可視化ツール 
