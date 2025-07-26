@@ -357,7 +357,7 @@ def main():
             selected_speaker = st.selectbox("参加者から選択", [""] + speakers, help="自分の名前を選択すると、名前入力欄に自動入力されます")
             if selected_speaker:
                 st.session_state['selected_speaker'] = selected_speaker
-                # st.rerun()を削除して無限ループを防ぐ
+                st.rerun()  # 状態更新を即座に反映
         
         # GPT API設定を削除
         pass
@@ -497,6 +497,7 @@ def main():
                 st.session_state['show_speaker_selection'] = False
                 st.session_state['speaker_selected'] = True
                 st.success(f"✅ 「{selected_speaker}」として設定しました！")
+                st.rerun()  # 状態更新を即座に反映
             else:
                 st.warning("⚠️ 参加者を選択してください。")
                 st.stop()
