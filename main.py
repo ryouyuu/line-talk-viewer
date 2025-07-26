@@ -498,20 +498,38 @@ def main():
         # 基本情報表示（モバイル対応）
         # 参加者名が設定されている場合のみ表示
         if own_name:
-                if st.session_state.get('is_mobile', False):
-                    # モバイル用の縦並び表示
+            if st.session_state.get('is_mobile', False):
+                # モバイル用の縦並び表示
+                st.header("📊 基本情報")
+                
+                date_range = parser.get_date_range(df)
+                
+                # モバイル用のメトリクス表示
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("総メッセージ数", f"{len(df):,}件")
+                    st.metric("会話日数", f"{df['date'].nunique()}日")
+                with col2:
+                    st.metric("参加者数", f"{len(speakers)}人")
+                    st.metric("日付範囲", f"{date_range[0]} 〜 {date_range[1]}")
+                
+                st.markdown("**参加者:**")
+                for speaker in speakers:
+                    if speaker == own_name:
+                        st.write(f"• **{speaker}** (あなた)")
+                    else:
+                        st.write(f"• {speaker}")
+            else:
+                # デスクトップ用の横並び表示
+                with col2:
                     st.header("📊 基本情報")
                     
                     date_range = parser.get_date_range(df)
                     
-                    # モバイル用のメトリクス表示
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("総メッセージ数", f"{len(df):,}件")
-                        st.metric("会話日数", f"{df['date'].nunique()}日")
-                    with col2:
-                        st.metric("参加者数", f"{len(speakers)}人")
-                        st.metric("日付範囲", f"{date_range[0]} 〜 {date_range[1]}")
+                    st.metric("総メッセージ数", f"{len(df):,}件")
+                    st.metric("会話日数", f"{df['date'].nunique()}日")
+                    st.metric("参加者数", f"{len(speakers)}人")
+                    st.metric("日付範囲", f"{date_range[0]} 〜 {date_range[1]}")
                     
                     st.markdown("**参加者:**")
                     for speaker in speakers:
@@ -519,75 +537,55 @@ def main():
                             st.write(f"• **{speaker}** (あなた)")
                         else:
                             st.write(f"• {speaker}")
-                else:
-                    # デスクトップ用の横並び表示
-                    with col2:
-                        st.header("📊 基本情報")
-                        
-                        date_range = parser.get_date_range(df)
-                        
-                        st.metric("総メッセージ数", f"{len(df):,}件")
-                        st.metric("会話日数", f"{df['date'].nunique()}日")
-                        st.metric("参加者数", f"{len(speakers)}人")
-                        st.metric("日付範囲", f"{date_range[0]} 〜 {date_range[1]}")
-                        
-                        st.markdown("**参加者:**")
-                        for speaker in speakers:
-                            if speaker == own_name:
-                                st.write(f"• **{speaker}** (あなた)")
-                            else:
-                                st.write(f"• {speaker}")
-            
-            # タブで機能を分ける（モバイル対応）
-            # 参加者名が設定されている場合のみ表示
-            if own_name:
-                if st.session_state.get('is_mobile', False):
-                    # モバイル用のタブ（少ないタブ数）
-                    tab1, tab2, tab3 = st.tabs(["💬 会話", "🔍 検索", "📈 分析"])
+        
+        # タブで機能を分ける（モバイル対応）
+        # 参加者名が設定されている場合のみ表示
+        if own_name:
+            if st.session_state.get('is_mobile', False):
+                # モバイル用のタブ（少ないタブ数）
+                tab1, tab2, tab3 = st.tabs(["💬 会話", "🔍 検索", "📈 分析"])
+                
+                with tab1:
+                    display_conversation_tab(df, own_name, parser)
+                
+                with tab2:
+                    display_search_tab(df, own_name, parser)
+                
+                with tab3:
+                    # モバイル用の分析選択
+                    analysis_type = st.selectbox(
+                        "分析タイプを選択",
+                        ["基本統計", "感情分析", "頻出ワード", "返信速度", "高度な分析"]
+                    )
                     
-                    with tab1:
-                        display_conversation_tab(df, own_name, parser)
-                    
-                    with tab2:
-                        display_search_tab(df, own_name, parser)
-                    
-                    with tab3:
-                        # モバイル用の分析選択
-                        analysis_type = st.selectbox(
-                            "分析タイプを選択",
-                            ["基本統計", "感情分析", "頻出ワード", "返信速度", "高度な分析"]
-                        )
-                        
-                        if analysis_type == "基本統計":
-                            display_stats_tab(df, own_name)
-                        elif analysis_type == "感情分析":
-                            display_emotion_analysis(df)
-                        elif analysis_type == "頻出ワード":
-                            display_word_analysis(df, own_name)
-                        elif analysis_type == "返信速度":
-                            display_message_speed_analysis(df, own_name)
-                        elif analysis_type == "高度な分析":
-                            display_advanced_stats(df, own_name)
-                else:
-                    # デスクトップ用のタブ
-                    tab1, tab2, tab3, tab4, tab5 = st.tabs(["💬 会話表示", "🔍 検索", "📈 分析", "📊 統計", "📈 高度な分析"])
-                    
-                    with tab1:
-                        display_conversation_tab(df, own_name, parser)
-                    
-                    with tab2:
-                        display_search_tab(df, own_name, parser)
-                    
-                    with tab3:
-                        display_analysis_tab(df, own_name)
-                    
-                    with tab4:
+                    if analysis_type == "基本統計":
                         display_stats_tab(df, own_name)
-                    
-                    with tab5:
+                    elif analysis_type == "感情分析":
+                        display_emotion_analysis(df)
+                    elif analysis_type == "頻出ワード":
+                        display_word_analysis(df, own_name)
+                    elif analysis_type == "返信速度":
+                        display_message_speed_analysis(df, own_name)
+                    elif analysis_type == "高度な分析":
                         display_advanced_stats(df, own_name)
-            
-
+            else:
+                # デスクトップ用のタブ
+                tab1, tab2, tab3, tab4, tab5 = st.tabs(["💬 会話表示", "🔍 検索", "📈 分析", "📊 統計", "📈 高度な分析"])
+                
+                with tab1:
+                    display_conversation_tab(df, own_name, parser)
+                
+                with tab2:
+                    display_search_tab(df, own_name, parser)
+                
+                with tab3:
+                    display_analysis_tab(df, own_name)
+                
+                with tab4:
+                    display_stats_tab(df, own_name)
+                
+                                    with tab5:
+                        display_advanced_stats(df, own_name)
     
     else:
         # 初期表示
