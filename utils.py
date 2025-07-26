@@ -395,7 +395,19 @@ def render_chat_messages(df: pd.DataFrame, own_name: str, search_keyword: str = 
         if message['date'] != current_date:
             current_date = message['date']
             date_obj = datetime.strptime(current_date, "%Y/%m/%d")
-            formatted_date = date_obj.strftime("%Y年%m月%d日 (%A)")
+            
+            # 日本語の曜日表示
+            weekday_names = {
+                0: '月曜日',
+                1: '火曜日', 
+                2: '水曜日',
+                3: '木曜日',
+                4: '金曜日',
+                5: '土曜日',
+                6: '日曜日'
+            }
+            weekday = weekday_names[date_obj.weekday()]
+            formatted_date = date_obj.strftime(f"%Y年%m月%d日 ({weekday})")
             html_parts.append(f'<div class="date-separator">{formatted_date}</div>')
             current_sender = None
         
