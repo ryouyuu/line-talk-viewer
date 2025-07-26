@@ -349,11 +349,17 @@ def main():
         if speakers:
             st.info(f"**参加者一覧:** {', '.join(speakers)}")
             
+            # 自動検出情報の表示
+            if 'auto_detected_speaker' in st.session_state and 'first_speaker' in st.session_state:
+                st.success(f"**🔍 自動検出:**")
+                st.success(f"• 1行目: {st.session_state['first_speaker']}")
+                st.success(f"• メイン対象: {st.session_state['auto_detected_speaker']}")
+            
             # 参加者選択
             selected_speaker = st.selectbox("参加者から選択", [""] + speakers, help="自分の名前を選択すると、名前入力欄に自動入力されます")
             if selected_speaker:
                 st.session_state['selected_speaker'] = selected_speaker
-                st.rerun()
+                # st.rerun()を削除して無限ループを防ぐ
         
         # GPT API設定を削除
         pass
@@ -377,7 +383,7 @@ def main():
                 st.session_state.pop('parser', None)
                 st.session_state.pop('speaker_selected', None)
             st.success("サンプルデータを読み込みました！")
-            st.rerun()
+            # st.rerun()を削除して無限ループを防ぐ
     
     # メインコンテンツ（モバイル対応）
     # 画面幅に応じてレイアウトを調整
@@ -465,28 +471,66 @@ def main():
                 st.info("ファイル形式を確認してください。LINEのバックアップテキストファイルである必要があります。")
                 return
         
-        # 参加者選択ポップアップ表示（選択が完了していない場合のみ）
+        # 参加者名の自動特定とメインコンテンツ表示対象の設定
         if st.session_state.get('show_speaker_selection', False) and not st.session_state.get('speaker_selected', False):
             st.markdown("---")
-            st.markdown("### 👤 参加者選択")
-            st.info("📋 この会話に参加している方の名前を選択してください。")
+            st.markdown("### 👤 参加者設定")
             
-            # 参加者選択セレクトボックス
-            selected_speaker = st.selectbox(
-                "どの参加者にしますか？",
-                [""] + speakers,
-                help="自分の名前を選択すると、会話履歴があなたの視点で表示されます"
-            )
+            # 自動的にメインコンテンツの表示対象を特定
+            main_speaker = parser.detect_main_speaker(df)
+            first_speaker = df.iloc[0]['sender'] if not df.empty else ""
             
-            if selected_speaker:
-                st.session_state['selected_speaker'] = selected_speaker
-                st.session_state['show_speaker_selection'] = False
-                st.session_state['speaker_selected'] = True
-                st.success(f"✅ 「{selected_speaker}」として設定しました！")
-                st.rerun()
+            if main_speaker and first_speaker:
+                st.info(f"📋 **自動検出結果:**")
+                st.info(f"• 1行目の参加者: **{first_speaker}**")
+                st.info(f"• メインコンテンツ表示対象: **{main_speaker}**")
+                st.info("💡 1行目の参加者ではない方が自動的にメインコンテンツの表示対象として設定されます。")
+                
+                # 自動設定の確認
+                if st.button("✅ 自動設定を適用", type="primary"):
+                    st.session_state['selected_speaker'] = main_speaker
+                    st.session_state['show_speaker_selection'] = False
+                    st.session_state['speaker_selected'] = True
+                    st.session_state['auto_detected_speaker'] = main_speaker
+                    st.session_state['first_speaker'] = first_speaker
+                    st.success(f"✅ 「{main_speaker}」として自動設定しました！")
+                    # st.rerun()を削除して無限ループを防ぐ
+                
+                st.markdown("---")
+                st.markdown("**または、手動で参加者を選択:**")
+                
+                # 手動選択オプション
+                selected_speaker = st.selectbox(
+                    "参加者を手動で選択",
+                    [""] + speakers,
+                    help="自動設定と異なる参加者を選択したい場合はこちらを使用してください"
+                )
+                
+                if selected_speaker:
+                    st.session_state['selected_speaker'] = selected_speaker
+                    st.session_state['show_speaker_selection'] = False
+                    st.session_state['speaker_selected'] = True
+                    st.success(f"✅ 「{selected_speaker}」として手動設定しました！")
+                    # st.rerun()を削除して無限ループを防ぐ
             else:
-                st.warning("⚠️ 参加者を選択してください。")
-                st.stop()
+                st.warning("⚠️ 参加者を自動特定できませんでした。手動で選択してください。")
+                
+                # 手動選択
+                selected_speaker = st.selectbox(
+                    "参加者を選択してください",
+                    [""] + speakers,
+                    help="自分の名前を選択すると、会話履歴があなたの視点で表示されます"
+                )
+                
+                if selected_speaker:
+                    st.session_state['selected_speaker'] = selected_speaker
+                    st.session_state['show_speaker_selection'] = False
+                    st.session_state['speaker_selected'] = True
+                    st.success(f"✅ 「{selected_speaker}」として設定しました！")
+                    # st.rerun()を削除して無限ループを防ぐ
+                else:
+                    st.warning("⚠️ 参加者を選択してください。")
+                    st.stop()
         
         # ユーザー名の検証（名前が入力されている場合のみ）
         if own_name and own_name not in speakers:
@@ -901,7 +945,7 @@ def display_emotion_analysis(df: pd.DataFrame):
                         del st.session_state['emotion_analyzer']
                     if 'emotion_analysis_confirmed' in st.session_state:
                         del st.session_state['emotion_analysis_confirmed']
-                    st.rerun()
+                    # st.rerun()を削除して無限ループを防ぐ
             else:
                 st.warning("感情分析データがありません")
         else:
@@ -1117,5 +1161,11 @@ if __name__ == "__main__":
     # 感情分析関連のセッション状態を初期化
     if 'emotion_analysis_confirmed' not in st.session_state:
         st.session_state['emotion_analysis_confirmed'] = False
+    
+    # 参加者自動検出関連のセッション状態を初期化
+    if 'auto_detected_speaker' not in st.session_state:
+        st.session_state['auto_detected_speaker'] = None
+    if 'first_speaker' not in st.session_state:
+        st.session_state['first_speaker'] = None
     
     main() 
