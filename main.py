@@ -340,10 +340,9 @@ def main():
             speakers = parser.get_speakers(df)
         
         # 自分の名前設定
-        default_name = st.session_state.get('selected_speaker', "")
         own_name = st.text_input(
             "あなたの名前を入力してください",
-            value=default_name,
+            value=st.session_state.get('selected_speaker', ""),
             help="自分のメッセージを右寄せで表示するために使用します"
         )
         
@@ -355,13 +354,14 @@ def main():
             selected_speaker = st.selectbox("参加者から選択", [""] + speakers, help="自分の名前を選択すると、名前入力欄に自動入力されます")
             if selected_speaker:
                 st.session_state['selected_speaker'] = selected_speaker
+                st.rerun()
         
         # GPT API設定を削除
         pass
         
         st.markdown("---")
         
-        # サンプルデータボタン
+                    # サンプルデータボタン
         if st.button("📝 サンプルデータで試す"):
             sample_content = create_sample_data_file()
             with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
@@ -371,6 +371,12 @@ def main():
             # セッション状態に保存
             st.session_state['uploaded_file_path'] = temp_file_path
             st.session_state['file_uploaded'] = True
+            st.session_state['show_speaker_selection'] = True
+            # 新しいファイルの場合は解析済みデータをクリア
+            if 'last_file_path' not in st.session_state or st.session_state['last_file_path'] != temp_file_path:
+                st.session_state.pop('parsed_data', None)
+                st.session_state.pop('parser', None)
+                st.session_state.pop('speaker_selected', None)
             st.success("サンプルデータを読み込みました！")
             st.rerun()
     
@@ -395,6 +401,12 @@ def main():
             
             st.session_state['uploaded_file_path'] = temp_file_path
             st.session_state['file_uploaded'] = True
+            st.session_state['show_speaker_selection'] = True
+            # 新しいファイルの場合は解析済みデータをクリア
+            if 'last_file_path' not in st.session_state or st.session_state['last_file_path'] != temp_file_path:
+                st.session_state.pop('parsed_data', None)
+                st.session_state.pop('parser', None)
+                st.session_state.pop('speaker_selected', None)
             st.success(f"ファイル '{uploaded_file.name}' をアップロードしました！")
     else:
         # デスクトップ用の横並びレイアウト
@@ -418,33 +430,76 @@ def main():
                 
                 st.session_state['uploaded_file_path'] = temp_file_path
                 st.session_state['file_uploaded'] = True
+                st.session_state['show_speaker_selection'] = True
+                # 新しいファイルの場合は解析済みデータをクリア
+                if 'last_file_path' not in st.session_state or st.session_state['last_file_path'] != temp_file_path:
+                    st.session_state.pop('parsed_data', None)
+                    st.session_state.pop('parser', None)
+                    st.session_state.pop('speaker_selected', None)
                 st.success(f"ファイル '{uploaded_file.name}' をアップロードしました！")
     
     # ファイルがアップロードされている場合の処理
     if st.session_state.get('file_uploaded', False) and 'uploaded_file_path' in st.session_state:
         file_path = st.session_state['uploaded_file_path']
         
-        try:
-            # ファイル解析
-            parser = LineTalkParser()
-            df = parser.parse_file(file_path)
-            
-            # セッション状態に保存
-            st.session_state['parsed_data'] = df
-            st.session_state['parser'] = parser
-            
-            # 参加者リストを取得
+        # 既に解析済みの場合はセッション状態から取得
+        if ('parsed_data' in st.session_state and 'parser' in st.session_state and 
+            'last_file_path' in st.session_state and st.session_state['last_file_path'] == file_path):
+            df = st.session_state['parsed_data']
+            parser = st.session_state['parser']
             speakers = parser.get_speakers(df)
+        else:
+            try:
+                # ファイル解析
+                parser = LineTalkParser()
+                df = parser.parse_file(file_path)
+                
+                # セッション状態に保存
+                st.session_state['parsed_data'] = df
+                st.session_state['parser'] = parser
+                st.session_state['last_file_path'] = file_path
+                
+                # 参加者リストを取得
+                speakers = parser.get_speakers(df)
             
-            # ユーザー名の検証
-            if own_name not in speakers:
+            # 参加者選択ポップアップ表示（選択が完了していない場合のみ）
+            if st.session_state.get('show_speaker_selection', False) and not st.session_state.get('speaker_selected', False):
+                st.markdown("---")
+                st.markdown("### 👤 参加者選択")
+                st.info("📋 この会話に参加している方の名前を選択してください。")
+                
+                # 参加者選択セレクトボックス
+                selected_speaker = st.selectbox(
+                    "どの参加者にしますか？",
+                    [""] + speakers,
+                    help="自分の名前を選択すると、会話履歴があなたの視点で表示されます"
+                )
+                
+                if selected_speaker:
+                    st.session_state['selected_speaker'] = selected_speaker
+                    st.session_state['show_speaker_selection'] = False
+                    st.session_state['speaker_selected'] = True
+                    st.success(f"✅ 「{selected_speaker}」として設定しました！")
+                    st.rerun()
+                else:
+                    st.warning("⚠️ 参加者を選択してください。")
+                    st.stop()
+            
+
+            
+
+            
+            # ユーザー名の検証（名前が入力されている場合のみ）
+            if own_name and own_name not in speakers:
                 st.error(f"❌ エラー: 「{own_name}」は会話に参加していません。")
                 st.info(f"**参加者一覧:** {', '.join(speakers)}")
                 st.info("サイドバーで正しい名前を入力してください。")
                 return
             
             # 基本情報表示（モバイル対応）
-            if st.session_state.get('is_mobile', False):
+            # 参加者名が設定されている場合のみ表示
+            if own_name:
+                if st.session_state.get('is_mobile', False):
                 # モバイル用の縦並び表示
                 st.header("📊 基本情報")
                 
@@ -485,7 +540,9 @@ def main():
                             st.write(f"• {speaker}")
             
             # タブで機能を分ける（モバイル対応）
-            if st.session_state.get('is_mobile', False):
+            # 参加者名が設定されている場合のみ表示
+            if own_name:
+                if st.session_state.get('is_mobile', False):
                 # モバイル用のタブ（少ないタブ数）
                 tab1, tab2, tab3 = st.tabs(["💬 会話", "🔍 検索", "📈 分析"])
                 
@@ -512,24 +569,24 @@ def main():
                         display_message_speed_analysis(df, own_name)
                     elif analysis_type == "高度な分析":
                         display_advanced_stats(df, own_name)
-            else:
-                # デスクトップ用のタブ
-                tab1, tab2, tab3, tab4, tab5 = st.tabs(["💬 会話表示", "🔍 検索", "📈 分析", "📊 統計", "📈 高度な分析"])
-                
-                with tab1:
-                    display_conversation_tab(df, own_name, parser)
-                
-                with tab2:
-                    display_search_tab(df, own_name, parser)
-                
-                with tab3:
-                    display_analysis_tab(df, own_name)
-                
-                with tab4:
-                    display_stats_tab(df, own_name)
-                
-                with tab5:
-                    display_advanced_stats(df, own_name)
+                else:
+                    # デスクトップ用のタブ
+                    tab1, tab2, tab3, tab4, tab5 = st.tabs(["💬 会話表示", "🔍 検索", "📈 分析", "📊 統計", "📈 高度な分析"])
+                    
+                    with tab1:
+                        display_conversation_tab(df, own_name, parser)
+                    
+                    with tab2:
+                        display_search_tab(df, own_name, parser)
+                    
+                    with tab3:
+                        display_analysis_tab(df, own_name)
+                    
+                    with tab4:
+                        display_stats_tab(df, own_name)
+                    
+                    with tab5:
+                        display_advanced_stats(df, own_name)
             
             pass
                 
