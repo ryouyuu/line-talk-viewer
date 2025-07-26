@@ -146,7 +146,7 @@ class LineTalkParser:
             df: 解析されたメッセージのDataFrame
             
         Returns:
-            メインコンテンツの表示対象となる参加者名（1行目の参加者ではない方）
+            メインコンテンツの表示対象となる参加者名（1行目の参加者と同じ）
         """
         if df.empty:
             return ""
@@ -157,17 +157,8 @@ class LineTalkParser:
         # 1行目の参加者名を取得
         first_speaker = first_message['sender']
         
-        # 全参加者を取得
-        all_speakers = self.get_speakers(df)
-        
-        # 1行目の参加者ではない方をメインコンテンツの表示対象とする
-        if len(all_speakers) >= 2:
-            for speaker in all_speakers:
-                if speaker != first_speaker:
-                    return speaker
-        
-        # 参加者が1人しかいない場合はその参加者を返す
-        return first_speaker if all_speakers else ""
+        # 1行目の参加者をメインコンテンツの表示対象とする
+        return first_speaker
     
     def get_date_range(self, df: pd.DataFrame) -> Tuple[str, str]:
         """会話の日付範囲を取得"""
