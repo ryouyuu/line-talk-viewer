@@ -461,9 +461,13 @@ def main():
                 
                 # 参加者リストを取得
                 speakers = parser.get_speakers(df)
-            
-            # 参加者選択ポップアップ表示（選択が完了していない場合のみ）
-            if st.session_state.get('show_speaker_selection', False) and not st.session_state.get('speaker_selected', False):
+            except Exception as e:
+                st.error(f"ファイル解析エラー: {e}")
+                st.info("ファイル形式を確認してください。LINEのバックアップテキストファイルである必要があります。")
+                return
+        
+        # 参加者選択ポップアップ表示（選択が完了していない場合のみ）
+        if st.session_state.get('show_speaker_selection', False) and not st.session_state.get('speaker_selected', False):
                 st.markdown("---")
                 st.markdown("### 👤 参加者選択")
                 st.info("📋 この会話に参加している方の名前を選択してください。")
@@ -588,11 +592,7 @@ def main():
                     with tab5:
                         display_advanced_stats(df, own_name)
             
-            pass
-                
-        except Exception as e:
-            st.error(f"ファイル解析エラー: {e}")
-            st.info("ファイル形式を確認してください。LINEのバックアップテキストファイルである必要があります。")
+
     
     else:
         # 初期表示
