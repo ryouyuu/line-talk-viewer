@@ -340,7 +340,7 @@ def main():
             speakers = parser.get_speakers(df)
         
         # 自分の名前設定
-        default_name = st.session_state.get('selected_speaker', "ゆうき")
+        default_name = st.session_state.get('selected_speaker', "")
         own_name = st.text_input(
             "あなたの名前を入力してください",
             value=default_name,
