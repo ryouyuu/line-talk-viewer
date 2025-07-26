@@ -584,8 +584,8 @@ def main():
                 with tab4:
                     display_stats_tab(df, own_name)
                 
-                                    with tab5:
-                        display_advanced_stats(df, own_name)
+                with tab5:
+                    display_advanced_stats(df, own_name)
     
     else:
         # 初期表示
