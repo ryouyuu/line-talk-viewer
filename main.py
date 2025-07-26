@@ -357,7 +357,6 @@ def main():
             selected_speaker = st.selectbox("参加者から選択", [""] + speakers, help="自分の名前を選択すると、名前入力欄に自動入力されます")
             if selected_speaker:
                 st.session_state['selected_speaker'] = selected_speaker
-                st.rerun()  # 状態更新を即座に反映
         
         # GPT API設定を削除
         pass
@@ -474,7 +473,7 @@ def main():
                 return
         
         # 参加者選択（手動選択のみ）
-        if st.session_state.get('show_speaker_selection', False) and not st.session_state.get('speaker_selected', False):
+        if st.session_state.get('show_speaker_selection', False) and not st.session_state.get('speaker_selected', False) and not st.session_state.get('selected_speaker'):
             st.markdown("---")
             st.markdown("### 👤 参加者選択")
             
@@ -497,7 +496,6 @@ def main():
                 st.session_state['show_speaker_selection'] = False
                 st.session_state['speaker_selected'] = True
                 st.success(f"✅ 「{selected_speaker}」として設定しました！")
-                st.rerun()  # 状態更新を即座に反映
             else:
                 st.warning("⚠️ 参加者を選択してください。")
                 st.stop()
@@ -511,7 +509,8 @@ def main():
         
         # 基本情報表示（モバイル対応）
         # 参加者名が設定されている場合のみ表示
-        if own_name:
+        selected_speaker = st.session_state.get('selected_speaker', '')
+        if selected_speaker:
             if st.session_state.get('is_mobile', False):
                 # モバイル用の縦並び表示
                 st.header("📊 基本情報")
@@ -529,7 +528,7 @@ def main():
                 
                 st.markdown("**参加者:**")
                 for speaker in speakers:
-                    if speaker == own_name:
+                    if speaker == selected_speaker:
                         st.write(f"• **{speaker}** (あなた)")
                     else:
                         st.write(f"• {speaker}")
@@ -547,23 +546,23 @@ def main():
                     
                     st.markdown("**参加者:**")
                     for speaker in speakers:
-                        if speaker == own_name:
+                        if speaker == selected_speaker:
                             st.write(f"• **{speaker}** (あなた)")
                         else:
                             st.write(f"• {speaker}")
         
         # タブで機能を分ける（モバイル対応）
         # 参加者名が設定されている場合のみ表示
-        if own_name:
+        if selected_speaker:
             if st.session_state.get('is_mobile', False):
                 # モバイル用のタブ（少ないタブ数）
                 tab1, tab2, tab3 = st.tabs(["💬 会話", "🔍 検索", "📈 分析"])
                 
                 with tab1:
-                    display_conversation_tab(df, own_name, parser)
+                    display_conversation_tab(df, selected_speaker, parser)
                 
                 with tab2:
-                    display_search_tab(df, own_name, parser)
+                    display_search_tab(df, selected_speaker, parser)
                 
                 with tab3:
                     # モバイル用の分析選択
@@ -573,33 +572,33 @@ def main():
                     )
                     
                     if analysis_type == "基本統計":
-                        display_stats_tab(df, own_name)
+                        display_stats_tab(df, selected_speaker)
                     elif analysis_type == "感情分析":
                         display_emotion_analysis(df)
                     elif analysis_type == "頻出ワード":
-                        display_word_analysis(df, own_name)
+                        display_word_analysis(df, selected_speaker)
                     elif analysis_type == "返信速度":
-                        display_message_speed_analysis(df, own_name)
+                        display_message_speed_analysis(df, selected_speaker)
                     elif analysis_type == "高度な分析":
-                        display_advanced_stats(df, own_name)
+                        display_advanced_stats(df, selected_speaker)
             else:
                 # デスクトップ用のタブ
                 tab1, tab2, tab3, tab4, tab5 = st.tabs(["💬 会話表示", "🔍 検索", "📈 分析", "📊 統計", "📈 高度な分析"])
                 
                 with tab1:
-                    display_conversation_tab(df, own_name, parser)
+                    display_conversation_tab(df, selected_speaker, parser)
                 
                 with tab2:
-                    display_search_tab(df, own_name, parser)
+                    display_search_tab(df, selected_speaker, parser)
                 
                 with tab3:
-                    display_analysis_tab(df, own_name)
+                    display_analysis_tab(df, selected_speaker)
                 
                 with tab4:
-                    display_stats_tab(df, own_name)
+                    display_stats_tab(df, selected_speaker)
                 
                 with tab5:
-                    display_advanced_stats(df, own_name)
+                    display_advanced_stats(df, selected_speaker)
     
     else:
         # 初期表示
