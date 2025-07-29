@@ -457,10 +457,14 @@ def main():
                 parser = LineTalkParser()
                 df = parser.parse_file(file_path)
                 
+                # 順番の情報を取得
+                order_info = parser.get_original_order_info(df)
+                
                 # セッション状態に保存
                 st.session_state['parsed_data'] = df
                 st.session_state['parser'] = parser
                 st.session_state['last_file_path'] = file_path
+                st.session_state['order_info'] = order_info
                 
                 # 1行目の参加者情報を保存
                 if not df.empty:
@@ -468,6 +472,18 @@ def main():
                 
                 # 参加者リストを取得
                 speakers = parser.get_speakers(df)
+                
+                # 順番の情報を表示
+                if order_info and order_info['order_differences_count'] > 0:
+                    st.warning(f"""
+                    ⚠️ **ファイル解析結果**
+                    - 元のファイルの順番と日時順で {order_info['order_differences_count']} 箇所の違いを検出しました
+                    - 現在は元のファイルの順番で表示しています
+                    - 会話履歴タブで表示順序を変更できます
+                    """)
+                else:
+                    st.success("✅ ファイル解析完了: 会話の順番は正常です")
+                    
             except Exception as e:
                 st.error(f"ファイル解析エラー: {e}")
                 st.info("ファイル形式を確認してください。LINEのバックアップテキストファイルである必要があります。")
@@ -623,207 +639,204 @@ def main():
 
 def display_conversation_tab(df: pd.DataFrame, own_name: str, parser: LineTalkParser):
     """会話表示タブ"""
-    st.header("💬 会話履歴")
+    st.subheader("💬 会話履歴")
     
-    # 日付選択
-    dates = sorted(df['date'].unique())
-    selected_date = st.selectbox(
-        "表示する日付を選択",
-        dates,
-        index=len(dates) - 1 if dates else 0
+    # 順番の情報を表示
+    order_info = parser.get_original_order_info(df)
+    if order_info:
+        if order_info['order_differences_count'] > 0:
+            st.warning(f"""
+            ⚠️ **会話の順番について**
+            - 元のファイルの順番と日時順で {order_info['order_differences_count']} 箇所の違いを検出しました
+            - 現在は元のファイルの順番で表示しています
+            - 日時順で表示したい場合は、下のオプションを変更してください
+            """)
+        else:
+            st.success("✅ 会話の順番は元のファイル通りです")
+    
+    # 表示順序の選択
+    display_order = st.selectbox(
+        "表示順序",
+        ["元のファイル順", "日時順"],
+        help="元のファイル順: LINEで出力された順番のまま表示\n日時順: 時間順に並び替えて表示"
     )
     
-    # 選択された日付のメッセージを取得
-    daily_df = parser.filter_by_date(df, selected_date)
-    
-    if not daily_df.empty:
-        # LINE風UIで表示
-        chat_html = render_chat_messages(daily_df, own_name)
-        full_html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <style>
-            {create_line_style_css()}
-            </style>
-        </head>
-        <body>
-            <div class="chat-container">{chat_html}</div>
-        </body>
-        </html>
-        """
-        st.components.v1.html(full_html, height=600, scrolling=True)
+    # 表示用のDataFrameを準備
+    if display_order == "日時順":
+        display_df = df.sort_values('datetime').reset_index(drop=True)
+        st.info("📅 日時順で表示しています")
     else:
-        st.info("選択された日付にメッセージがありません。")
+        display_df = df.sort_values('line_number').reset_index(drop=True)
+        st.info("📄 元のファイル順で表示しています")
+    
+    # 検索機能
+    search_keyword = st.text_input("🔍 メッセージを検索", placeholder="キーワードを入力...")
+    
+    if search_keyword:
+        display_df = display_df[display_df['message'].str.contains(search_keyword, case=False, na=False)]
+        st.info(f"検索結果: {len(display_df)}件のメッセージ")
+    
+    # 表示件数制限
+    max_messages = st.slider("表示件数", min_value=10, max_value=1000, value=100, step=10)
+    
+    if len(display_df) > max_messages:
+        display_df = display_df.head(max_messages)
+        st.info(f"最新 {max_messages} 件を表示中（全 {len(df)} 件中）")
+    
+    # 会話履歴を表示
+    if not display_df.empty:
+        # LINE風のスタイルを適用
+        css = create_line_style_css()
+        st.markdown(css, unsafe_allow_html=True)
+        
+        # 会話履歴をHTMLで表示
+        chat_html = render_chat_messages(display_df, own_name, search_keyword)
+        st.markdown(chat_html, unsafe_allow_html=True)
+        
+        # 詳細情報
+        with st.expander("📊 表示詳細情報"):
+            st.write(f"**表示件数**: {len(display_df)}件")
+            st.write(f"**期間**: {display_df['date'].min()} 〜 {display_df['date'].max()}")
+            st.write(f"**参加者**: {', '.join(display_df['sender'].unique())}")
+            
+            if order_info and order_info['order_differences_count'] > 0:
+                st.write(f"**順番の違い**: {order_info['order_differences_count']}箇所")
+                if st.checkbox("順番の詳細を表示"):
+                    st.json(order_info['order_differences'])
+    else:
+        st.warning("表示するメッセージがありません")
 
 def display_search_tab(df: pd.DataFrame, own_name: str, parser: LineTalkParser):
-    """検索タブ"""
-    st.header("🔍 メッセージ検索・フィルタ")
+    """検索・フィルタタブ"""
+    st.subheader("🔍 検索・フィルタ")
     
-    # 検索フィルタを初期化
+    # 順番の情報を表示
+    order_info = parser.get_original_order_info(df)
+    if order_info and order_info['order_differences_count'] > 0:
+        st.info(f"💡 検索結果は元のファイル順で表示されます（順番の違い: {order_info['order_differences_count']}箇所）")
+    
+    # 検索・フィルタ機能
     search_filter = SearchFilter()
     
-    # タブで検索機能を分ける
-    search_tab1, search_tab2 = st.tabs(["🔍 キーワード検索", "⚙️ 詳細フィルタ"])
+    # 検索条件の設定
+    col1, col2 = st.columns(2)
     
-    with search_tab1:
-        # 基本的なキーワード検索
-        search_keyword = st.text_input(
-            "検索キーワードを入力",
-            placeholder="例: おはよう、楽しい、など"
-        )
+    with col1:
+        # キーワード検索
+        keyword = st.text_input("🔍 キーワード検索", placeholder="検索したい言葉を入力...")
         
-        if search_keyword:
-            # 検索実行
-            search_results = parser.search_messages(df, search_keyword)
-            
-            if not search_results.empty:
-                st.success(f"「{search_keyword}」を含むメッセージを {len(search_results)} 件見つけました")
-                
-                # 検索結果を表示
-                chat_html = render_chat_messages(search_results, own_name, search_keyword)
-                full_html = f"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="utf-8">
-                    <style>
-                    {create_line_style_css()}
-                    </style>
-                </head>
-                <body>
-                    <div class="chat-container">{chat_html}</div>
-                </body>
-                </html>
-                """
-                st.components.v1.html(full_html, height=600, scrolling=True)
-                
-                # 検索結果の詳細
-                with st.expander("📋 検索結果詳細"):
-                    for _, row in search_results.iterrows():
-                        st.write(f"**{row['date']} {row['time']}** - {row['sender']}: {row['message']}")
-            else:
-                st.warning(f"「{search_keyword}」を含むメッセージが見つかりませんでした。")
-        else:
-            st.info("検索キーワードを入力してください。")
+        # 日付範囲検索
+        st.subheader("📅 日付範囲")
+        date_range = parser.get_date_range(df)
+        start_date = st.date_input("開始日", value=pd.to_datetime(date_range[0]).date())
+        end_date = st.date_input("終了日", value=pd.to_datetime(date_range[1]).date())
+        
+        # 時間範囲検索
+        st.subheader("⏰ 時間範囲")
+        start_time = st.time_input("開始時間", value=pd.to_datetime("00:00").time())
+        end_time = st.time_input("終了時間", value=pd.to_datetime("23:59").time())
     
-    with search_tab2:
-        # 詳細フィルタ機能
-        st.subheader("⚙️ 詳細フィルタ設定")
-        
-        # 日付範囲フィルタ
-        st.write("**📅 日付範囲**")
-        col1, col2 = st.columns(2)
-        with col1:
-            start_date = st.date_input("開始日", value=pd.to_datetime(df['date'].min()))
-        with col2:
-            end_date = st.date_input("終了日", value=pd.to_datetime(df['date'].max()))
-        
-        # 送信者フィルタ
-        st.write("**👥 送信者**")
-        speakers = df['sender'].unique()
+    with col2:
+        # 発言者フィルタ
+        st.subheader("👤 発言者フィルタ")
+        speakers = parser.get_speakers(df)
         selected_speakers = st.multiselect(
-            "送信者を選択",
-            options=speakers,
-            default=speakers.tolist()
+            "発言者を選択",
+            speakers,
+            default=speakers,
+            help="選択した発言者のメッセージのみを表示"
         )
         
         # メッセージタイプフィルタ
-        st.write("**📝 メッセージタイプ**")
+        st.subheader("📝 メッセージタイプ")
         message_types = st.multiselect(
             "メッセージタイプを選択",
-            options=['text', 'stamp', 'image', 'system'],
-            default=['text', 'stamp', 'image', 'system']
+            ["テキスト", "画像", "動画", "ファイル", "スタンプ"],
+            default=["テキスト"],
+            help="選択したタイプのメッセージのみを表示"
         )
         
         # メッセージ長フィルタ
-        st.write("**📏 メッセージ長**")
-        col1, col2 = st.columns(2)
-        with col1:
-            min_length = st.number_input("最小文字数", min_value=0, value=0)
-        with col2:
-            max_length = st.number_input("最大文字数", min_value=0, value=1000)
+        st.subheader("📏 メッセージ長")
+        min_length = st.number_input("最小文字数", min_value=0, value=0)
+        max_length = st.number_input("最大文字数", min_value=0, value=1000)
+    
+    # 検索実行ボタン
+    if st.button("🔍 検索実行", type="primary"):
+        # フィルタ条件を構築
+        filters = {}
         
-        # 時間範囲フィルタ
-        st.write("**⏰ 時間範囲**")
-        col1, col2 = st.columns(2)
-        with col1:
-            start_time = st.time_input("開始時間", value=datetime.strptime("00:00", "%H:%M").time())
-        with col2:
-            end_time = st.time_input("終了時間", value=datetime.strptime("23:59", "%H:%M").time())
+        if keyword:
+            filters['keyword'] = [keyword]
         
-        # 絵文字フィルタ
-        st.write("**😊 絵文字**")
-        emoji_option = st.selectbox(
-            "絵文字の有無",
-            options=["すべて", "絵文字を含む", "絵文字を含まない"]
-        )
+        if start_date and end_date:
+            filters['date_range'] = [start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')]
         
-        # フィルタ適用ボタン
-        if st.button("🔍 フィルタを適用", type="primary"):
-            # フィルタ設定を構築
-            filters = {}
-            
-            # 日付範囲
-            filters['date_range'] = (start_date.strftime("%Y/%m/%d"), end_date.strftime("%Y/%m/%d"))
-            
-            # 送信者
-            if selected_speakers:
-                filters['speakers'] = selected_speakers
-            
-            # メッセージタイプ
-            if message_types:
-                filters['message_types'] = message_types
-            
-            # メッセージ長
-            if max_length > 0:
-                filters['length'] = (min_length, max_length)
-            
-            # 時間範囲
-            filters['time_range'] = (start_time.strftime("%H:%M"), end_time.strftime("%H:%M"))
-            
-            # 絵文字
-            if emoji_option == "絵文字を含む":
-                filters['has_emoji'] = True
-            elif emoji_option == "絵文字を含まない":
-                filters['has_emoji'] = False
-            
-            # フィルタ適用
+        if start_time and end_time:
+            filters['time_range'] = [start_time.strftime('%H:%M'), end_time.strftime('%H:%M')]
+        
+        if selected_speakers and len(selected_speakers) != len(speakers):
+            filters['speakers'] = selected_speakers
+        
+        if message_types and len(message_types) != 5:
+            filters['message_types'] = message_types
+        
+        if min_length > 0 or max_length < 1000:
+            filters['length'] = [min_length, max_length]
+        
+        # 検索実行
+        if filters:
             filtered_df = search_filter.apply_multiple_filters(df, filters)
             
             if not filtered_df.empty:
-                st.success(f"フィルタ条件に一致するメッセージを {len(filtered_df)} 件見つけました")
+                st.success(f"検索結果: {len(filtered_df)}件のメッセージが見つかりました")
                 
-                # フィルタ結果を表示
-                chat_html = render_chat_messages(filtered_df, own_name)
-                full_html = f"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="utf-8">
-                    <style>
-                    {create_line_style_css()}
-                    </style>
-                </head>
-                <body>
-                    <div class="chat-container">{chat_html}</div>
-                </body>
-                </html>
-                """
-                st.components.v1.html(full_html, height=600, scrolling=True)
+                # 検索結果の表示
+                st.subheader("📋 検索結果")
                 
-                # フィルタ結果の統計
-                st.subheader("📊 フィルタ結果の統計")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("メッセージ数", len(filtered_df))
-                with col2:
-                    st.metric("日数", filtered_df['date'].nunique())
-                with col3:
-                    st.metric("送信者数", filtered_df['sender'].nunique())
+                # 表示順序の選択
+                display_order = st.selectbox(
+                    "表示順序",
+                    ["元のファイル順", "日時順"],
+                    key="search_display_order"
+                )
+                
+                # 表示用のDataFrameを準備
+                if display_order == "日時順":
+                    display_df = filtered_df.sort_values('datetime').reset_index(drop=True)
+                    st.info("📅 日時順で表示しています")
+                else:
+                    display_df = filtered_df.sort_values('line_number').reset_index(drop=True)
+                    st.info("📄 元のファイル順で表示しています")
+                
+                # 検索結果を表示
+                css = create_line_style_css()
+                st.markdown(css, unsafe_allow_html=True)
+                
+                chat_html = render_chat_messages(display_df, own_name, keyword)
+                st.markdown(chat_html, unsafe_allow_html=True)
+                
+                # 検索結果の詳細情報
+                with st.expander("📊 検索結果詳細"):
+                    st.write(f"**検索条件**: {filters}")
+                    st.write(f"**結果件数**: {len(filtered_df)}件")
+                    st.write(f"**期間**: {filtered_df['date'].min()} 〜 {filtered_df['date'].max()}")
+                    st.write(f"**発言者**: {', '.join(filtered_df['sender'].unique())}")
+                    
+                    # 検索結果の統計
+                    if len(filtered_df) > 0:
+                        avg_length = filtered_df['message'].str.len().mean()
+                        st.write(f"**平均文字数**: {avg_length:.1f}文字")
+                        
+                        # 発言者別の件数
+                        speaker_counts = filtered_df['sender'].value_counts()
+                        st.write("**発言者別件数**:")
+                        for speaker, count in speaker_counts.items():
+                            st.write(f"- {speaker}: {count}件")
             else:
-                st.warning("フィルタ条件に一致するメッセージが見つかりませんでした")
+                st.warning("検索条件に一致するメッセージが見つかりませんでした")
+        else:
+            st.info("検索条件を設定してください")
 
 def display_analysis_tab(df: pd.DataFrame, own_name: str):
     """分析タブ"""

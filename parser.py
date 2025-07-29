@@ -38,7 +38,7 @@ class LineTalkParser:
             encoding: ファイルエンコーディング
             
         Returns:
-            解析されたメッセージのDataFrame
+            解析されたメッセージのDataFrame（元の順番を保持）
         """
         try:
             with open(file_path, 'r', encoding=encoding) as f:
@@ -56,8 +56,10 @@ class LineTalkParser:
         lines = content.split('\n')
         
         current_date = None
+        line_number = 0  # 行番号を追加して順番を保持
         
         for line in lines:
+            line_number += 1
             line = line.strip()
             if not line:
                 continue
@@ -75,12 +77,14 @@ class LineTalkParser:
                 try:
                     datetime_obj = datetime.strptime(f"{date_str} {time_str}", "%Y/%m/%d %H:%M")
                     messages.append({
+                        'line_number': line_number,  # 行番号を追加
                         'datetime': datetime_obj,
                         'date': date_str,
                         'time': time_str,
                         'sender': sender.strip(),
                         'message': message.strip(),
-                        'type': 'message'
+                        'type': 'message',
+                        'original_line': line  # 元の行を保持
                     })
                 except ValueError as e:
                     logger.warning(f"日時解析エラー: {line} - {e}")
@@ -94,12 +98,14 @@ class LineTalkParser:
                     try:
                         datetime_obj = datetime.strptime(f"{current_date} {time_str}", "%Y/%m/%d %H:%M")
                         messages.append({
+                            'line_number': line_number,  # 行番号を追加
                             'datetime': datetime_obj,
                             'date': current_date,
                             'time': time_str,
                             'sender': sender.strip(),
                             'message': message.strip(),
-                            'type': 'message'
+                            'type': 'message',
+                            'original_line': line  # 元の行を保持
                         })
                     except ValueError as e:
                         logger.warning(f"日時解析エラー: {line} - {e}")
@@ -113,12 +119,14 @@ class LineTalkParser:
                     try:
                         datetime_obj = datetime.strptime(f"{date_str} {time_str}", "%Y/%m/%d %H:%M")
                         messages.append({
+                            'line_number': line_number,  # 行番号を追加
                             'datetime': datetime_obj,
                             'date': date_str,
                             'time': time_str,
                             'sender': 'システム',
                             'message': system_message.strip(),
-                            'type': 'system'
+                            'type': 'system',
+                            'original_line': line  # 元の行を保持
                         })
                     except ValueError as e:
                         logger.warning(f"システムメッセージ日時解析エラー: {line} - {e}")
@@ -127,12 +135,84 @@ class LineTalkParser:
         if not messages:
             raise ValueError("有効なメッセージが見つかりませんでした")
         
-        # DataFrameに変換して日時順にソート
+        # DataFrameに変換して行番号順にソート（元の順番を保持）
         df = pd.DataFrame(messages)
-        df = df.sort_values('datetime').reset_index(drop=True)
+        df = df.sort_values('line_number').reset_index(drop=True)
+        
+        # 日時の整合性チェック
+        self._validate_datetime_order(df)
         
         logger.info(f"解析完了: {len(df)}件のメッセージを処理しました")
         return df
+    
+    def _validate_datetime_order(self, df: pd.DataFrame) -> None:
+        """
+        日時の順番をチェックして、異常があれば警告を出す
+        
+        Args:
+            df: 解析されたメッセージのDataFrame
+        """
+        if len(df) < 2:
+            return
+        
+        # 日時の順番をチェック
+        datetime_issues = []
+        for i in range(1, len(df)):
+            current_dt = df.iloc[i]['datetime']
+            prev_dt = df.iloc[i-1]['datetime']
+            
+            # 前のメッセージより時間が早い場合
+            if current_dt < prev_dt:
+                datetime_issues.append({
+                    'line': i + 1,
+                    'current': current_dt,
+                    'previous': prev_dt,
+                    'difference': (prev_dt - current_dt).total_seconds() / 60  # 分単位
+                })
+        
+        if datetime_issues:
+            logger.warning(f"日時の順番に {len(datetime_issues)} 件の異常を検出しました")
+            for issue in datetime_issues[:5]:  # 最初の5件のみ表示
+                logger.warning(f"行 {issue['line']}: {issue['current']} が {issue['previous']} より {issue['difference']:.1f}分早い")
+            
+            if len(datetime_issues) > 5:
+                logger.warning(f"... 他 {len(datetime_issues) - 5} 件の異常があります")
+        else:
+            logger.info("日時の順番は正常です")
+    
+    def get_original_order_info(self, df: pd.DataFrame) -> Dict:
+        """
+        元の順番に関する情報を取得
+        
+        Args:
+            df: 解析されたメッセージのDataFrame
+            
+        Returns:
+            順番に関する情報
+        """
+        if df.empty:
+            return {}
+        
+        # 日時順と行番号順の比較
+        datetime_order = df.sort_values('datetime').reset_index(drop=True)
+        line_order = df.sort_values('line_number').reset_index(drop=True)
+        
+        # 順番が異なる箇所を検出
+        order_differences = []
+        for i in range(len(df)):
+            if datetime_order.iloc[i]['line_number'] != line_order.iloc[i]['line_number']:
+                order_differences.append({
+                    'position': i + 1,
+                    'datetime_order_line': datetime_order.iloc[i]['line_number'],
+                    'line_order_line': line_order.iloc[i]['line_number']
+                })
+        
+        return {
+            'total_messages': len(df),
+            'order_differences_count': len(order_differences),
+            'order_differences': order_differences[:10],  # 最初の10件のみ
+            'uses_original_order': len(order_differences) == 0
+        }
     
     def get_speakers(self, df: pd.DataFrame) -> List[str]:
         """会話参加者を取得"""
