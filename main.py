@@ -687,11 +687,31 @@ def display_conversation_tab(df: pd.DataFrame, own_name: str, parser: LineTalkPa
     if not display_df.empty:
         # LINE風のスタイルを適用
         css = create_line_style_css()
-        st.markdown(css, unsafe_allow_html=True)
         
         # 会話履歴をHTMLで表示
         chat_html = render_chat_messages(display_df, own_name, search_keyword)
-        st.markdown(chat_html, unsafe_allow_html=True)
+        
+        # 完全なHTMLページを作成
+        full_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+            {css}
+            </style>
+        </head>
+        <body>
+            <div class="chat-container">
+                {chat_html}
+            </div>
+        </body>
+        </html>
+        """
+        
+        # HTMLを表示
+        st.components.v1.html(full_html, height=600, scrolling=True)
         
         # 詳細情報
         with st.expander("📊 表示詳細情報"):
@@ -811,10 +831,30 @@ def display_search_tab(df: pd.DataFrame, own_name: str, parser: LineTalkParser):
                 
                 # 検索結果を表示
                 css = create_line_style_css()
-                st.markdown(css, unsafe_allow_html=True)
                 
                 chat_html = render_chat_messages(display_df, own_name, keyword)
-                st.markdown(chat_html, unsafe_allow_html=True)
+                
+                # 完全なHTMLページを作成
+                full_html = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                    {css}
+                    </style>
+                </head>
+                <body>
+                    <div class="chat-container">
+                        {chat_html}
+                    </div>
+                </body>
+                </html>
+                """
+                
+                # HTMLを表示
+                st.components.v1.html(full_html, height=600, scrolling=True)
                 
                 # 検索結果の詳細情報
                 with st.expander("📊 検索結果詳細"):

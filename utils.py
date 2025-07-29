@@ -4,6 +4,8 @@ from typing import Dict, List, Optional
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
+import html
+import re
 
 def create_line_style_css() -> str:
     """LINE風のスタイルCSSを生成（モバイル対応）"""
@@ -99,12 +101,10 @@ def create_line_style_css() -> str:
         color: #666;
         text-align: center;
         margin: 10px auto;
-        border-radius: 15px;
-        font-size: 11px;
-        font-style: italic;
-        padding: 6px 12px;
-        max-width: 80%;
-        width: fit-content;
+        max-width: 200px;
+        font-size: 12px;
+        border-radius: 10px;
+        padding: 5px 10px;
     }
     
     .message-info {
@@ -144,12 +144,31 @@ def create_line_style_css() -> str:
         }
     }
     
+    .message-error {
+        background-color: #ffebee;
+        color: #c62828;
+        border: 1px solid #ffcdd2;
+        text-align: center;
+        margin: 10px auto;
+        max-width: 300px;
+        font-size: 12px;
+        border-radius: 10px;
+        padding: 5px 10px;
+    }
+    
     .search-highlight {
-        background-color: #FFD700;
-        padding: 1px 3px;
+        background-color: #fff3cd;
+        color: #856404;
+        padding: 2px 4px;
         border-radius: 3px;
         font-weight: bold;
-        color: #333;
+    }
+    
+    .no-messages {
+        text-align: center;
+        color: #666;
+        padding: 20px;
+        font-style: italic;
     }
     
     .profile-avatar {
@@ -220,7 +239,8 @@ def create_line_style_css() -> str:
     
     /* 絵文字のスタイル */
     .emoji {
-        font-size: 16px;
+        font-size: 1.2em;
+        display: inline-block;
         vertical-align: middle;
     }
     
@@ -233,9 +253,9 @@ def create_line_style_css() -> str:
     
     /* スタンプのスタイル */
     .stamp-message {
-        font-size: 20px;
+        font-size: 2em;
         text-align: center;
-        padding: 8px;
+        padding: 10px;
     }
     
     /* モバイル用のスタンプ調整 */
@@ -316,57 +336,74 @@ def render_message_bubble(message: Dict, is_own_message: bool, search_keyword: s
     Returns:
         HTML文字列
     """
-    sender = message['sender']
-    time_str = message['time']
-    content = message['message']
-    
-    # 検索キーワードをハイライト
-    if search_keyword and search_keyword.lower() in content.lower():
-        content = content.replace(
-            search_keyword, 
-            f'<span class="search-highlight">{search_keyword}</span>'
-        )
-    
-    # スタンプメッセージの処理
-    if content == "[スタンプ]":
-        content = '<div class="stamp-message">🎵</div>'
-    
-    # 絵文字のスタイル適用
-    content = content.replace('😊', '<span class="emoji">😊</span>')
-    content = content.replace('☀️', '<span class="emoji">☀️</span>')
-    content = content.replace('🐶', '<span class="emoji">🐶</span>')
-    
-    if message['type'] == 'system':
-        return f"""
-        <div class="message-bubble message-system">
-            {content}
-        </div>
-        """
-    
-    # アバターの初期文字を取得
-    avatar_text = sender[0] if sender else "?"
-    
-    if is_own_message:
-        # 自分のメッセージ（右寄せ）
-        return f"""
-        <div class="message-bubble message-sent">
-            <div class="message-content">
+    try:
+        sender = str(message.get('sender', 'Unknown'))
+        time_str = str(message.get('time', ''))
+        content = str(message.get('message', ''))
+        
+        # HTMLエスケープ
+        sender = html.escape(sender)
+        time_str = html.escape(time_str)
+        content = html.escape(content)
+        
+        # 検索キーワードをハイライト
+        if search_keyword and search_keyword.lower() in content.lower():
+            # 大文字小文字を区別せずにハイライト
+            pattern = re.compile(re.escape(search_keyword), re.IGNORECASE)
+            content = pattern.sub(f'<span class="search-highlight">{search_keyword}</span>', content)
+        
+        # スタンプメッセージの処理
+        if content == "[スタンプ]":
+            content = '<div class="stamp-message">🎵</div>'
+        
+        # 絵文字のスタイル適用（エスケープ後に適用）
+        content = content.replace('😊', '<span class="emoji">😊</span>')
+        content = content.replace('☀️', '<span class="emoji">☀️</span>')
+        content = content.replace('🐶', '<span class="emoji">🐶</span>')
+        content = content.replace('😄', '<span class="emoji">😄</span>')
+        content = content.replace('❤️', '<span class="emoji">❤️</span>')
+        content = content.replace('👍', '<span class="emoji">👍</span>')
+        
+        if message.get('type') == 'system':
+            return f"""
+            <div class="message-bubble message-system">
                 {content}
-                <div class="message-time">{time_str}</div>
             </div>
-        </div>
-        """
-    else:
-        # 相手のメッセージ（左寄せ、アバター付き）
-        return f"""
-        <div class="message-with-avatar">
-            <div class="profile-avatar">{avatar_text}</div>
-            <div class="message-bubble message-received">
+            """
+        
+        # アバターの初期文字を取得
+        avatar_text = sender[0] if sender else "?"
+        
+        if is_own_message:
+            # 自分のメッセージ（右寄せ）
+            return f"""
+            <div class="message-bubble message-sent">
                 <div class="message-content">
-                    <div class="message-info">{sender}</div>
                     {content}
                     <div class="message-time">{time_str}</div>
                 </div>
+            </div>
+            """
+        else:
+            # 相手のメッセージ（左寄せ、アバター付き）
+            return f"""
+            <div class="message-with-avatar">
+                <div class="profile-avatar">{avatar_text}</div>
+                <div class="message-bubble message-received">
+                    <div class="message-content">
+                        <div class="message-info">{sender}</div>
+                        {content}
+                        <div class="message-time">{time_str}</div>
+                    </div>
+                </div>
+            </div>
+            """
+    except Exception as e:
+        # エラーが発生した場合はシンプルな表示
+        return f"""
+        <div class="message-bubble message-error">
+            <div class="message-content">
+                メッセージの表示中にエラーが発生しました: {str(e)}
             </div>
         </div>
         """
@@ -384,7 +421,7 @@ def render_chat_messages(df: pd.DataFrame, own_name: str, search_keyword: str = 
         HTML文字列
     """
     if df.empty:
-        return "<p>メッセージがありません。</p>"
+        return '<div class="no-messages"><p>メッセージがありません。</p></div>'
     
     html_parts = []
     current_date = None
@@ -394,21 +431,25 @@ def render_chat_messages(df: pd.DataFrame, own_name: str, search_keyword: str = 
         # 日付セパレーター
         if message['date'] != current_date:
             current_date = message['date']
-            date_obj = datetime.strptime(current_date, "%Y/%m/%d")
-            
-            # 日本語の曜日表示
-            weekday_names = {
-                0: '月曜日',
-                1: '火曜日', 
-                2: '水曜日',
-                3: '木曜日',
-                4: '金曜日',
-                5: '土曜日',
-                6: '日曜日'
-            }
-            weekday = weekday_names[date_obj.weekday()]
-            formatted_date = date_obj.strftime(f"%Y年%m月%d日 ({weekday})")
-            html_parts.append(f'<div class="date-separator">{formatted_date}</div>')
+            try:
+                date_obj = datetime.strptime(current_date, "%Y/%m/%d")
+                
+                # 日本語の曜日表示
+                weekday_names = {
+                    0: '月曜日',
+                    1: '火曜日', 
+                    2: '水曜日',
+                    3: '木曜日',
+                    4: '金曜日',
+                    5: '土曜日',
+                    6: '日曜日'
+                }
+                weekday = weekday_names[date_obj.weekday()]
+                formatted_date = date_obj.strftime(f"%Y年%m月%d日 ({weekday})")
+                html_parts.append(f'<div class="date-separator">{formatted_date}</div>')
+            except ValueError:
+                # 日付解析に失敗した場合はそのまま表示
+                html_parts.append(f'<div class="date-separator">{current_date}</div>')
             current_sender = None
         
         # メッセージ吹き出し
