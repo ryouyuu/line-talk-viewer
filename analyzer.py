@@ -19,6 +19,7 @@ class EmotionAnalyzer:
         """感情分析器を初期化"""
         self.model_loaded = False
         self.sentiment_analyzer = None
+        self.japanese_sentiment_analyzer = None
         logger.info("感情分析モデルは必要時に読み込みます")
     
     def analyze_text(self, text: str) -> Dict[str, float]:
@@ -31,27 +32,110 @@ class EmotionAnalyzer:
         Returns:
             感情分析結果（positive, negative, neutralの確率）
         """
-        if not self.model_loaded or not text.strip():
+        if not text.strip():
             return {'positive': 0.33, 'negative': 0.33, 'neutral': 0.34}
         
+        try:
+            # 日本語感情分析を優先
+            if self.japanese_sentiment_analyzer:
+                return self._analyze_japanese_text(text)
+            elif self.sentiment_analyzer:
+                return self._analyze_english_text(text)
+            else:
+                return self._analyze_simple_text(text)
+                
+        except Exception as e:
+            logger.error(f"感情分析エラー: {e}")
+            return {'positive': 0.33, 'negative': 0.33, 'neutral': 0.34}
+    
+    def _analyze_japanese_text(self, text: str) -> Dict[str, float]:
+        """日本語テキストの感情分析"""
         try:
             # 長いテキストは分割
             if len(text) > 500:
                 text = text[:500]
             
+            result = self.japanese_sentiment_analyzer(text)
+            
+            # 日本語感情分析モデルの結果を適切に変換
+            if 'label' in result[0]:
+                label = result[0]['label']
+                score = result[0]['score']
+                
+                if label == 'positive':
+                    return {'positive': score, 'negative': (1-score)*0.3, 'neutral': (1-score)*0.7}
+                elif label == 'negative':
+                    return {'positive': (1-score)*0.3, 'negative': score, 'neutral': (1-score)*0.7}
+                else:  # neutral
+                    return {'positive': (1-score)*0.2, 'negative': (1-score)*0.2, 'neutral': score}
+            else:
+                # スコアベースの結果の場合
+                scores = result[0]
+                total = sum(scores.values())
+                if total > 0:
+                    return {k: v/total for k, v in scores.items()}
+                else:
+                    return {'positive': 0.33, 'negative': 0.33, 'neutral': 0.34}
+                    
+        except Exception as e:
+            logger.error(f"日本語感情分析エラー: {e}")
+            return self._analyze_simple_text(text)
+    
+    def _analyze_english_text(self, text: str) -> Dict[str, float]:
+        """英語テキストの感情分析（フォールバック）"""
+        try:
+            if len(text) > 500:
+                text = text[:500]
+            
             result = self.sentiment_analyzer(text)
             
-            # 結果を正規化
-            if result[0]['label'] == 'positive':
-                return {'positive': 0.8, 'negative': 0.1, 'neutral': 0.1}
-            elif result[0]['label'] == 'negative':
-                return {'positive': 0.1, 'negative': 0.8, 'neutral': 0.1}
+            # 5段階評価を3分類に変換
+            if 'label' in result[0]:
+                label = result[0]['label']
+                score = result[0]['score']
+                
+                # ラベルを数値に変換
+                if label == '1 star' or label == '2 stars':
+                    return {'positive': 0.1, 'negative': score, 'neutral': 1-score}
+                elif label == '3 stars':
+                    return {'positive': 0.2, 'negative': 0.2, 'neutral': score}
+                elif label == '4 stars' or label == '5 stars':
+                    return {'positive': score, 'negative': 0.1, 'neutral': 1-score}
+                else:
+                    return {'positive': 0.33, 'negative': 0.33, 'neutral': 0.34}
             else:
-                return {'positive': 0.1, 'negative': 0.1, 'neutral': 0.8}
+                return {'positive': 0.33, 'negative': 0.33, 'neutral': 0.34}
                 
         except Exception as e:
-            logger.error(f"感情分析エラー: {e}")
+            logger.error(f"英語感情分析エラー: {e}")
+            return self._analyze_simple_text(text)
+    
+    def _analyze_simple_text(self, text: str) -> Dict[str, float]:
+        """シンプルな感情分析（キーワードベース）"""
+        # 日本語の感情キーワード
+        positive_words = ['楽しい', '嬉しい', '良い', '素晴らしい', '最高', '好き', '愛してる', 'ありがとう', 
+                         '笑', '😊', '😄', '😍', '👍', '❤️', '🎉', '✨']
+        negative_words = ['悲しい', '辛い', '嫌い', '最悪', '疲れた', '困った', '怒り', '😢', '😭', 
+                         '😡', '😞', '💔', '😰', '😨', '😱']
+        
+        text_lower = text.lower()
+        positive_count = sum(1 for word in positive_words if word in text_lower)
+        negative_count = sum(1 for word in negative_words if word in text_lower)
+        
+        total_keywords = positive_count + negative_count
+        
+        if total_keywords == 0:
             return {'positive': 0.33, 'negative': 0.33, 'neutral': 0.34}
+        
+        positive_ratio = positive_count / total_keywords
+        negative_ratio = negative_count / total_keywords
+        neutral_ratio = 1 - positive_ratio - negative_ratio
+        
+        return {
+            'positive': positive_ratio,
+            'negative': negative_ratio,
+            'neutral': max(neutral_ratio, 0.1)  # 最小値を保証
+        }
     
     def analyze_messages(self, df: pd.DataFrame, batch_size: int = 32) -> pd.DataFrame:
         """
@@ -69,18 +153,7 @@ class EmotionAnalyzer:
         
         # 感情分析モデルを必要時に読み込み
         if not self.model_loaded:
-            try:
-                from transformers import pipeline
-                self.sentiment_analyzer = pipeline(
-                    "sentiment-analysis",
-                    model="nlptown/bert-base-multilingual-uncased-sentiment",
-                    device=-1  # CPU使用
-                )
-                self.model_loaded = True
-                logger.info("感情分析モデルを読み込みました")
-            except Exception as e:
-                logger.warning(f"感情分析モデルの読み込みに失敗: {e}")
-                self.model_loaded = False
+            self._load_sentiment_models()
         
         # システムメッセージを除外
         message_df = df[df['type'] != 'system'].copy()
@@ -98,20 +171,12 @@ class EmotionAnalyzer:
             
             try:
                 # バッチで感情分析実行
-                if self.model_loaded:
-                    batch_results = self.sentiment_analyzer(messages)
-                    
-                    for result in batch_results:
-                        if result['label'] == 'positive':
-                            results.append({'positive': 0.8, 'negative': 0.1, 'neutral': 0.1})
-                        elif result['label'] == 'negative':
-                            results.append({'positive': 0.1, 'negative': 0.8, 'neutral': 0.1})
-                        else:
-                            results.append({'positive': 0.1, 'negative': 0.1, 'neutral': 0.8})
-                else:
-                    # モデルが読み込めない場合はデフォルト値
-                    for _ in range(len(messages)):
-                        results.append({'positive': 0.33, 'negative': 0.33, 'neutral': 0.34})
+                batch_results = []
+                for message in messages:
+                    emotion_result = self.analyze_text(message)
+                    batch_results.append(emotion_result)
+                
+                results.extend(batch_results)
                         
             except Exception as e:
                 logger.error(f"バッチ感情分析エラー: {e}")
@@ -132,6 +197,41 @@ class EmotionAnalyzer:
         
         return df_with_emotion
     
+    def _load_sentiment_models(self):
+        """感情分析モデルを読み込み"""
+        try:
+            from transformers import pipeline
+            
+            # 日本語感情分析モデルを優先
+            try:
+                self.japanese_sentiment_analyzer = pipeline(
+                    "sentiment-analysis",
+                    model="cl-tohoku/bert-base-japanese-sentiment",
+                    device=-1  # CPU使用
+                )
+                logger.info("日本語感情分析モデルを読み込みました")
+                self.model_loaded = True
+                return
+            except Exception as e:
+                logger.warning(f"日本語感情分析モデルの読み込みに失敗: {e}")
+            
+            # フォールバック: 英語感情分析モデル
+            try:
+                self.sentiment_analyzer = pipeline(
+                    "sentiment-analysis",
+                    model="nlptown/bert-base-multilingual-uncased-sentiment",
+                    device=-1  # CPU使用
+                )
+                logger.info("英語感情分析モデルを読み込みました")
+                self.model_loaded = True
+            except Exception as e:
+                logger.warning(f"英語感情分析モデルの読み込みに失敗: {e}")
+                self.model_loaded = False
+                
+        except ImportError:
+            logger.warning("transformersライブラリがインストールされていません")
+            self.model_loaded = False
+    
     def get_daily_emotion_summary(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         日別感情分析サマリーを取得
@@ -145,13 +245,89 @@ class EmotionAnalyzer:
         if df.empty or 'positive' not in df.columns:
             return pd.DataFrame()
         
+        # 感情スコアを集計
         daily_emotion = df.groupby('date').agg({
             'positive': 'sum',
             'negative': 'sum', 
             'neutral': 'sum'
         }).reset_index()
         
+        # 感情の割合を計算
+        total_emotions = daily_emotion[['positive', 'negative', 'neutral']].sum(axis=1)
+        daily_emotion['positive_ratio'] = daily_emotion['positive'] / total_emotions
+        daily_emotion['negative_ratio'] = daily_emotion['negative'] / total_emotions
+        daily_emotion['neutral_ratio'] = daily_emotion['neutral'] / total_emotions
+        
+        # 主要感情を決定
+        daily_emotion['dominant_emotion'] = daily_emotion[['positive_ratio', 'negative_ratio', 'neutral_ratio']].idxmax(axis=1)
+        daily_emotion['dominant_emotion'] = daily_emotion['dominant_emotion'].str.replace('_ratio', '')
+        
         return daily_emotion
+    
+    def get_emotion_statistics(self, df: pd.DataFrame) -> Dict:
+        """
+        感情分析の統計情報を取得
+        
+        Args:
+            df: 感情分析済みDataFrame
+            
+        Returns:
+            感情統計情報
+        """
+        if df.empty or 'positive' not in df.columns:
+            return {}
+        
+        # 全体の感情分布
+        total_positive = df['positive'].sum()
+        total_negative = df['negative'].sum()
+        total_neutral = df['neutral'].sum()
+        total_emotions = total_positive + total_negative + total_neutral
+        
+        if total_emotions == 0:
+            return {}
+        
+        # 感情の割合
+        positive_ratio = total_positive / total_emotions
+        negative_ratio = total_negative / total_emotions
+        neutral_ratio = total_neutral / total_emotions
+        
+        # 主要感情
+        emotions = [positive_ratio, negative_ratio, neutral_ratio]
+        emotion_labels = ['positive', 'negative', 'neutral']
+        dominant_emotion = emotion_labels[emotions.index(max(emotions))]
+        
+        # 感情の変化
+        df_sorted = df.sort_values('datetime')
+        emotion_trend = self._calculate_emotion_trend(df_sorted)
+        
+        return {
+            'total_emotions': total_emotions,
+            'positive_ratio': positive_ratio,
+            'negative_ratio': negative_ratio,
+            'neutral_ratio': neutral_ratio,
+            'dominant_emotion': dominant_emotion,
+            'emotion_trend': emotion_trend
+        }
+    
+    def _calculate_emotion_trend(self, df: pd.DataFrame) -> str:
+        """感情の変化傾向を計算"""
+        if len(df) < 10:
+            return "データ不足"
+        
+        # 前半と後半の感情を比較
+        mid_point = len(df) // 2
+        first_half = df.iloc[:mid_point]
+        second_half = df.iloc[mid_point:]
+        
+        first_positive = first_half['positive'].mean()
+        second_positive = second_half['positive'].mean()
+        
+        if second_positive > first_positive * 1.1:
+            return "ポジティブ傾向"
+        elif second_positive < first_positive * 0.9:
+            return "ネガティブ傾向"
+        else:
+            return "安定"
 
 class WordAnalyzer:
     """頻出ワード分析を行うクラス"""

@@ -443,24 +443,315 @@ def create_emotion_chart(emotion_data: pd.DataFrame) -> go.Figure:
         )
         return fig
     
-    fig = px.bar(
-        emotion_data, 
-        x='date', 
-        y=['positive', 'negative', 'neutral'],
-        title="日別感情分析結果",
-        labels={'value': 'メッセージ数', 'variable': '感情', 'date': '日付'},
-        color_discrete_map={
-            'positive': '#28a745',
-            'negative': '#dc3545', 
-            'neutral': '#6c757d'
-        }
-    )
+    # 日付をdatetime型に変換
+    emotion_data = emotion_data.copy()
+    emotion_data['date'] = pd.to_datetime(emotion_data['date'])
+    emotion_data = emotion_data.sort_values('date')
+    
+    # 感情の割合がある場合はそれを使用、なければ絶対値を使用
+    if 'positive_ratio' in emotion_data.columns:
+        y_columns = ['positive_ratio', 'negative_ratio', 'neutral_ratio']
+        y_title = "感情の割合"
+        hover_template = "%{y:.1%}<extra></extra>"
+    else:
+        y_columns = ['positive', 'negative', 'neutral']
+        y_title = "メッセージ数"
+        hover_template = "%{y}<extra></extra>"
+    
+    fig = go.Figure()
+    
+    # 各感情を個別のトレースとして追加
+    colors = {'positive': '#28a745', 'negative': '#dc3545', 'neutral': '#6c757d'}
+    labels = {'positive': 'ポジティブ', 'negative': 'ネガティブ', 'neutral': '中性'}
+    
+    for emotion in y_columns:
+        base_emotion = emotion.replace('_ratio', '')
+        fig.add_trace(go.Bar(
+            x=emotion_data['date'],
+            y=emotion_data[emotion],
+            name=labels[base_emotion],
+            marker_color=colors[base_emotion],
+            hovertemplate=hover_template,
+            opacity=0.8
+        ))
+    
+    # 主要感情のラインを追加
+    if 'dominant_emotion' in emotion_data.columns:
+        dominant_emotions = emotion_data['dominant_emotion'].map({
+            'positive': 'ポジティブ',
+            'negative': 'ネガティブ', 
+            'neutral': '中性'
+        })
+        
+        # 主要感情のポイントを追加
+        for emotion in ['positive', 'negative', 'neutral']:
+            mask = emotion_data['dominant_emotion'] == emotion
+            if mask.any():
+                fig.add_trace(go.Scatter(
+                    x=emotion_data[mask]['date'],
+                    y=emotion_data[mask][f'{emotion}_ratio' if f'{emotion}_ratio' in emotion_data.columns else emotion],
+                    mode='markers',
+                    marker=dict(
+                        size=8,
+                        color=colors[emotion],
+                        line=dict(width=2, color='white')
+                    ),
+                    name=f'{labels[emotion]}（主要）',
+                    showlegend=False,
+                    hovertemplate=f'{labels[emotion]}<extra></extra>'
+                ))
     
     fig.update_layout(
+        title="日別感情分析結果",
         xaxis_title="日付",
-        yaxis_title="メッセージ数",
+        yaxis_title=y_title,
+        barmode='stack',
         hovermode='x unified',
-        height=400
+        height=400,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        margin=dict(l=50, r=50, t=80, b=50)
+    )
+    
+    # Y軸のフォーマット
+    if 'positive_ratio' in emotion_data.columns:
+        fig.update_yaxis(tickformat='.0%')
+    
+    return fig
+
+def create_emotion_pie_chart(emotion_stats: Dict) -> go.Figure:
+    """感情分析の円グラフを作成"""
+    if not emotion_stats:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="感情分析データがありません",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False
+        )
+        return fig
+    
+    labels = ['ポジティブ', 'ネガティブ', '中性']
+    values = [
+        emotion_stats.get('positive_ratio', 0),
+        emotion_stats.get('negative_ratio', 0),
+        emotion_stats.get('neutral_ratio', 0)
+    ]
+    colors = ['#28a745', '#dc3545', '#6c757d']
+    
+    fig = go.Figure(data=[go.Pie(
+        labels=labels,
+        values=values,
+        hole=0.4,
+        marker_colors=colors,
+        textinfo='label+percent',
+        textposition='inside',
+        hovertemplate="%{label}<br>%{percent}<extra></extra>"
+    )])
+    
+    fig.update_layout(
+        title="感情分布",
+        height=400,
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="center",
+            x=0.5
+        )
+    )
+    
+    return fig
+
+def create_emotion_trend_chart(df: pd.DataFrame) -> go.Figure:
+    """感情の変化傾向チャートを作成"""
+    if df.empty or 'positive' not in df.columns:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="感情分析データがありません",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False
+        )
+        return fig
+    
+    # 日付でソート
+    df_sorted = df.sort_values('datetime')
+    
+    # 移動平均を計算
+    window_size = min(7, len(df_sorted) // 4)  # 適応的なウィンドウサイズ
+    if window_size < 2:
+        window_size = 2
+    
+    df_sorted['positive_ma'] = df_sorted['positive'].rolling(window=window_size, min_periods=1).mean()
+    df_sorted['negative_ma'] = df_sorted['negative'].rolling(window=window_size, min_periods=1).mean()
+    df_sorted['neutral_ma'] = df_sorted['neutral'].rolling(window=window_size, min_periods=1).mean()
+    
+    fig = go.Figure()
+    
+    # 移動平均ライン
+    fig.add_trace(go.Scatter(
+        x=df_sorted['datetime'],
+        y=df_sorted['positive_ma'],
+        mode='lines',
+        name='ポジティブ（移動平均）',
+        line=dict(color='#28a745', width=3),
+        hovertemplate="%{y:.3f}<extra></extra>"
+    ))
+    
+    fig.add_trace(go.Scatter(
+        x=df_sorted['datetime'],
+        y=df_sorted['negative_ma'],
+        mode='lines',
+        name='ネガティブ（移動平均）',
+        line=dict(color='#dc3545', width=3),
+        hovertemplate="%{y:.3f}<extra></extra>"
+    ))
+    
+    fig.add_trace(go.Scatter(
+        x=df_sorted['datetime'],
+        y=df_sorted['neutral_ma'],
+        mode='lines',
+        name='中性（移動平均）',
+        line=dict(color='#6c757d', width=3),
+        hovertemplate="%{y:.3f}<extra></extra>"
+    ))
+    
+    # 個別ポイント（透明度を下げて）
+    fig.add_trace(go.Scatter(
+        x=df_sorted['datetime'],
+        y=df_sorted['positive'],
+        mode='markers',
+        name='ポジティブ',
+        marker=dict(color='#28a745', size=4, opacity=0.3),
+        showlegend=False,
+        hovertemplate="%{y:.3f}<extra></extra>"
+    ))
+    
+    fig.add_trace(go.Scatter(
+        x=df_sorted['datetime'],
+        y=df_sorted['negative'],
+        mode='markers',
+        name='ネガティブ',
+        marker=dict(color='#dc3545', size=4, opacity=0.3),
+        showlegend=False,
+        hovertemplate="%{y:.3f}<extra></extra>"
+    ))
+    
+    fig.add_trace(go.Scatter(
+        x=df_sorted['datetime'],
+        y=df_sorted['neutral'],
+        mode='markers',
+        name='中性',
+        marker=dict(color='#6c757d', size=4, opacity=0.3),
+        showlegend=False,
+        hovertemplate="%{y:.3f}<extra></extra>"
+    ))
+    
+    fig.update_layout(
+        title="感情の変化傾向",
+        xaxis_title="日時",
+        yaxis_title="感情スコア",
+        height=400,
+        hovermode='x unified',
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="center",
+            x=0.5
+        )
+    )
+    
+    return fig
+
+def create_emotion_heatmap(df: pd.DataFrame) -> go.Figure:
+    """感情分析のヒートマップを作成"""
+    if df.empty or 'positive' not in df.columns:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="感情分析データがありません",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False
+        )
+        return fig
+    
+    # 日付と時間でグループ化
+    df_copy = df.copy()
+    df_copy['date'] = pd.to_datetime(df_copy['date'])
+    df_copy['hour'] = pd.to_datetime(df_copy['datetime']).dt.hour
+    
+    # 時間帯を定義
+    time_periods = {
+        '朝 (6-12時)': (6, 12),
+        '昼 (12-18時)': (12, 18),
+        '夕方 (18-22時)': (18, 22),
+        '夜 (22-6時)': (22, 24),
+        '深夜 (0-6時)': (0, 6)
+    }
+    
+    # 時間帯別の感情平均を計算
+    heatmap_data = []
+    for period_name, (start_hour, end_hour) in time_periods.items():
+        if start_hour < end_hour:
+            mask = (df_copy['hour'] >= start_hour) & (df_copy['hour'] < end_hour)
+        else:  # 深夜の場合
+            mask = (df_copy['hour'] >= start_hour) | (df_copy['hour'] < end_hour)
+        
+        period_data = df_copy[mask]
+        if not period_data.empty:
+            avg_positive = period_data['positive'].mean()
+            avg_negative = period_data['negative'].mean()
+            avg_neutral = period_data['neutral'].mean()
+            
+            heatmap_data.append({
+                'time_period': period_name,
+                'positive': avg_positive,
+                'negative': avg_negative,
+                'neutral': avg_neutral
+            })
+    
+    if not heatmap_data:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="データが不足しています",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False
+        )
+        return fig
+    
+    heatmap_df = pd.DataFrame(heatmap_data)
+    
+    # ヒートマップ用のデータを準備
+    emotions = ['positive', 'negative', 'neutral']
+    emotion_labels = ['ポジティブ', 'ネガティブ', '中性']
+    
+    z_data = []
+    for emotion in emotions:
+        z_data.append(heatmap_df[emotion].values)
+    
+    fig = go.Figure(data=go.Heatmap(
+        z=z_data,
+        x=heatmap_df['time_period'],
+        y=emotion_labels,
+        colorscale='RdYlGn',
+        text=[[f"{val:.3f}" for val in row] for row in z_data],
+        texttemplate="%{text}",
+        textfont={"size": 12},
+        hoverongaps=False,
+        hovertemplate="時間帯: %{x}<br>感情: %{y}<br>スコア: %{z:.3f}<extra></extra>"
+    ))
+    
+    fig.update_layout(
+        title="時間帯別感情分析",
+        xaxis_title="時間帯",
+        yaxis_title="感情",
+        height=300,
+        margin=dict(l=50, r=50, t=80, b=50)
     )
     
     return fig

@@ -10,6 +10,7 @@ from parser import LineTalkParser
 from analyzer import EmotionAnalyzer, WordAnalyzer, ConversationAnalyzer, SearchFilter, create_sample_emotion_data
 from utils import (
     create_line_style_css, render_chat_messages, create_emotion_chart,
+    create_emotion_pie_chart, create_emotion_trend_chart, create_emotion_heatmap,
     create_wordcloud_figure, display_stats_cards, create_sample_data_file,
     display_advanced_stats
 )
@@ -854,6 +855,7 @@ def display_emotion_analysis(df: pd.DataFrame):
     st.info("""
     **感情分析について**
     - 各メッセージの感情（ポジティブ/ネガティブ/中性）を分析します
+    - 日本語感情分析モデルを優先使用し、精度を向上させました
     - 大量のメッセージがある場合、処理に時間がかかります
     - 初回実行時は感情分析モデルのダウンロードが必要です
     """)
@@ -894,29 +896,103 @@ def display_emotion_analysis(df: pd.DataFrame):
         emotion_analyzer = st.session_state['emotion_analyzer']
         
         if 'positive' in df_with_emotion.columns:
-            # 日別感情サマリー
-            daily_emotion = emotion_analyzer.get_daily_emotion_summary(df_with_emotion)
+            # 感情統計情報を取得
+            emotion_stats = emotion_analyzer.get_emotion_statistics(df_with_emotion)
             
-            if not daily_emotion.empty:
-                # グラフ表示
-                fig = create_emotion_chart(daily_emotion)
+            # 統計情報をカード形式で表示
+            if emotion_stats:
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric(
+                        "ポジティブ率", 
+                        f"{emotion_stats['positive_ratio']:.1%}",
+                        delta=f"主要感情: {emotion_stats['dominant_emotion']}"
+                    )
+                
+                with col2:
+                    st.metric(
+                        "ネガティブ率", 
+                        f"{emotion_stats['negative_ratio']:.1%}"
+                    )
+                
+                with col3:
+                    st.metric(
+                        "中性率", 
+                        f"{emotion_stats['neutral_ratio']:.1%}"
+                    )
+                
+                with col4:
+                    st.metric(
+                        "感情傾向", 
+                        emotion_stats['emotion_trend']
+                    )
+            
+            # タブで詳細表示
+            tab1, tab2, tab3, tab4 = st.tabs(["📊 日別分析", "🥧 全体分布", "📈 変化傾向", "🌡️ 時間帯分析"])
+            
+            with tab1:
+                # 日別感情サマリー
+                daily_emotion = emotion_analyzer.get_daily_emotion_summary(df_with_emotion)
+                
+                if not daily_emotion.empty:
+                    # グラフ表示
+                    fig = create_emotion_chart(daily_emotion)
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # 詳細データ
+                    with st.expander("📊 感情分析詳細データ"):
+                        st.dataframe(daily_emotion)
+                else:
+                    st.warning("日別感情分析データがありません")
+            
+            with tab2:
+                # 全体分布の円グラフ
+                if emotion_stats:
+                    fig = create_emotion_pie_chart(emotion_stats)
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # 統計情報の詳細
+                    with st.expander("📈 感情統計詳細"):
+                        st.json(emotion_stats)
+                else:
+                    st.warning("感情統計データがありません")
+            
+            with tab3:
+                # 感情の変化傾向
+                fig = create_emotion_trend_chart(df_with_emotion)
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # 詳細データ
-                with st.expander("📊 感情分析詳細データ"):
-                    st.dataframe(daily_emotion)
+                # 変化傾向の説明
+                st.info("""
+                **変化傾向について**
+                - 移動平均線で感情の変化パターンを表示
+                - 個別のメッセージは薄い点で表示
+                - 時間とともに感情がどのように変化するかを確認できます
+                """)
+            
+            with tab4:
+                # 時間帯別感情分析
+                fig = create_emotion_heatmap(df_with_emotion)
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # 時間帯分析の説明
+                st.info("""
+                **時間帯別分析について**
+                - 各時間帯での感情の傾向を表示
+                - 色が濃いほどその感情が強いことを示します
+                - 時間帯によって感情パターンが異なることが分かります
+                """)
                     
-                # 感情分析のリセットボタン
-                if st.button("🔄 感情分析をリセット"):
-                    if 'emotion_results' in st.session_state:
-                        del st.session_state['emotion_results']
-                    if 'emotion_analyzer' in st.session_state:
-                        del st.session_state['emotion_analyzer']
-                    if 'emotion_analysis_confirmed' in st.session_state:
-                        del st.session_state['emotion_analysis_confirmed']
-                    # st.rerun()を削除して無限ループを防ぐ
-            else:
-                st.warning("感情分析データがありません")
+            # 感情分析のリセットボタン
+            if st.button("🔄 感情分析をリセット"):
+                if 'emotion_results' in st.session_state:
+                    del st.session_state['emotion_results']
+                if 'emotion_analyzer' in st.session_state:
+                    del st.session_state['emotion_analyzer']
+                if 'emotion_analysis_confirmed' in st.session_state:
+                    del st.session_state['emotion_analysis_confirmed']
+                st.rerun()
         else:
             st.warning("感情分析モデルの読み込みに失敗しました")
     else:
@@ -927,8 +1003,26 @@ def display_emotion_analysis(df: pd.DataFrame):
         sample_emotion_data = create_sample_emotion_data()
         if not sample_emotion_data.empty:
             st.subheader("📊 感情分析プレビュー（サンプルデータ）")
-            fig = create_emotion_chart(sample_emotion_data)
-            st.plotly_chart(fig, use_container_width=True)
+            
+            # プレビュー用のタブ
+            preview_tab1, preview_tab2 = st.tabs(["📊 日別分析", "🥧 全体分布"])
+            
+            with preview_tab1:
+                fig = create_emotion_chart(sample_emotion_data)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with preview_tab2:
+                # サンプル統計データ
+                sample_stats = {
+                    'positive_ratio': 0.45,
+                    'negative_ratio': 0.15,
+                    'neutral_ratio': 0.40,
+                    'dominant_emotion': 'positive',
+                    'emotion_trend': 'ポジティブ傾向'
+                }
+                fig = create_emotion_pie_chart(sample_stats)
+                st.plotly_chart(fig, use_container_width=True)
+            
             st.caption("※ これはサンプルデータです。実際の分析結果ではありません。")
 
 def display_word_analysis(df: pd.DataFrame, own_name: str):
