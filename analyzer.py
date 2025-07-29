@@ -149,32 +149,54 @@ class EmotionAnalyzer:
             感情分析結果を含むDataFrame
         """
         if df.empty:
+            logger.info("空のDataFrameが渡されました")
             return df
+        
+        logger.info(f"感情分析開始: {len(df)}件のメッセージ")
         
         # 感情分析モデルを必要時に読み込み
         if not self.model_loaded:
+            logger.info("感情分析モデルを読み込み中...")
             self._load_sentiment_models()
         
         # システムメッセージを除外
         message_df = df[df['type'] != 'system'].copy()
         system_df = df[df['type'] == 'system'].copy()
         
+        logger.info(f"分析対象メッセージ: {len(message_df)}件, システムメッセージ: {len(system_df)}件")
+        
         if message_df.empty:
+            logger.info("分析対象のメッセージがありません")
             return df
         
         results = []
         
         # バッチ処理
+        total_batches = (len(message_df) + batch_size - 1) // batch_size
+        logger.info(f"バッチ処理開始: {total_batches}バッチ, バッチサイズ: {batch_size}")
+        
         for i in range(0, len(message_df), batch_size):
+            batch_num = i // batch_size + 1
+            logger.info(f"バッチ処理中: {batch_num}/{total_batches}")
+            
             batch = message_df.iloc[i:i+batch_size]
             messages = batch['message'].tolist()
             
             try:
                 # バッチで感情分析実行
                 batch_results = []
-                for message in messages:
-                    emotion_result = self.analyze_text(message)
-                    batch_results.append(emotion_result)
+                for j, message in enumerate(messages):
+                    try:
+                        emotion_result = self.analyze_text(message)
+                        batch_results.append(emotion_result)
+                        
+                        # 進捗ログ（100件ごと）
+                        if (i + j + 1) % 100 == 0:
+                            logger.info(f"進捗: {i + j + 1}/{len(message_df)}件完了")
+                            
+                    except Exception as e:
+                        logger.warning(f"個別メッセージ分析エラー: {e}")
+                        batch_results.append({'positive': 0.33, 'negative': 0.33, 'neutral': 0.34})
                 
                 results.extend(batch_results)
                         
@@ -191,11 +213,17 @@ class EmotionAnalyzer:
         for _ in range(len(system_df)):
             results.append({'positive': 0, 'negative': 0, 'neutral': 1})
         
-        # 結果をDataFrameに追加
-        emotion_df = pd.DataFrame(results)
-        df_with_emotion = pd.concat([df, emotion_df], axis=1)
+        logger.info(f"感情分析結果生成: {len(results)}件")
         
-        return df_with_emotion
+        # 結果をDataFrameに追加
+        try:
+            emotion_df = pd.DataFrame(results)
+            df_with_emotion = pd.concat([df, emotion_df], axis=1)
+            logger.info("感情分析完了")
+            return df_with_emotion
+        except Exception as e:
+            logger.error(f"結果のDataFrame結合エラー: {e}")
+            return df
     
     def _load_sentiment_models(self):
         """感情分析モデルを読み込み"""
@@ -204,6 +232,7 @@ class EmotionAnalyzer:
             
             # 日本語感情分析モデルを優先
             try:
+                logger.info("日本語感情分析モデルを読み込み中...")
                 self.japanese_sentiment_analyzer = pipeline(
                     "sentiment-analysis",
                     model="cl-tohoku/bert-base-japanese-sentiment",
@@ -217,6 +246,7 @@ class EmotionAnalyzer:
             
             # フォールバック: 英語感情分析モデル
             try:
+                logger.info("英語感情分析モデルを読み込み中...")
                 self.sentiment_analyzer = pipeline(
                     "sentiment-analysis",
                     model="nlptown/bert-base-multilingual-uncased-sentiment",
@@ -230,6 +260,9 @@ class EmotionAnalyzer:
                 
         except ImportError:
             logger.warning("transformersライブラリがインストールされていません")
+            self.model_loaded = False
+        except Exception as e:
+            logger.error(f"感情分析モデルの読み込みで予期しないエラー: {e}")
             self.model_loaded = False
     
     def get_daily_emotion_summary(self, df: pd.DataFrame) -> pd.DataFrame:

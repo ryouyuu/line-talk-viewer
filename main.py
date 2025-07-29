@@ -860,6 +860,13 @@ def display_emotion_analysis(df: pd.DataFrame):
     - 初回実行時は感情分析モデルのダウンロードが必要です
     """)
     
+    # 分析モード選択
+    analysis_mode = st.selectbox(
+        "分析モードを選択",
+        ["標準モード（高精度）", "軽量モード（高速）"],
+        help="軽量モードはキーワードベースの分析で高速ですが精度は低めです"
+    )
+    
     # 感情分析実行ボタン
     if st.button("🚀 感情分析を実行", type="primary"):
         # 確認ダイアログ
@@ -868,32 +875,93 @@ def display_emotion_analysis(df: pd.DataFrame):
             
             # 感情分析実行
             with st.spinner("感情分析を実行中..."):
-                emotion_analyzer = EmotionAnalyzer()
-                
-                # 進捗バーを表示
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-                
-                # バッチサイズを設定（大量データの場合は小さく）
-                batch_size = 16 if len(df) > 1000 else 32
-                
-                status_text.text(f"感情分析を開始します... (総メッセージ数: {len(df)}件)")
-                
-                df_with_emotion = emotion_analyzer.analyze_messages(df, batch_size=batch_size)
-                
-                progress_bar.progress(100)
-                status_text.text("感情分析が完了しました！")
-                
-                # 結果をセッション状態に保存
-                st.session_state['emotion_results'] = df_with_emotion
-                st.session_state['emotion_analyzer'] = emotion_analyzer
-                
-                st.success("感情分析が完了しました！結果を表示します。")
-    
+                try:
+                    # ステップ1: 感情分析器の初期化
+                    st.info("感情分析器を初期化中...")
+                    emotion_analyzer = EmotionAnalyzer()
+                    
+                    # 軽量モードの場合はモデル読み込みをスキップ
+                    if "軽量モード" in analysis_mode:
+                        emotion_analyzer.model_loaded = False
+                        st.info("軽量モード: キーワードベースの分析を使用します")
+                    
+                    # 進捗バーを表示
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    # ステップ2: データの準備
+                    progress_bar.progress(10)
+                    status_text.text("データを準備中...")
+                    
+                    # バッチサイズを設定（大量データの場合は小さく）
+                    batch_size = 16 if len(df) > 1000 else 32
+                    
+                    # 軽量モードの場合はバッチサイズを大きく
+                    if "軽量モード" in analysis_mode:
+                        batch_size = 64 if len(df) > 1000 else 128
+                    
+                    # ステップ3: 感情分析の実行
+                    progress_bar.progress(20)
+                    status_text.text(f"感情分析を開始します... (総メッセージ数: {len(df)}件)")
+                    
+                    # タイムアウト設定付きで感情分析実行
+                    import time
+                    start_time = time.time()
+                    timeout = 300 if "標準モード" in analysis_mode else 60  # 軽量モードは1分
+                    
+                    df_with_emotion = emotion_analyzer.analyze_messages(df, batch_size=batch_size)
+                    
+                    # タイムアウトチェック
+                    if time.time() - start_time > timeout:
+                        st.error("感情分析がタイムアウトしました。データ量が多い場合は、ファイルを分割して試してください。")
+                        return
+                    
+                    progress_bar.progress(90)
+                    status_text.text("結果を保存中...")
+                    
+                    # ステップ4: 結果の保存
+                    st.session_state['emotion_results'] = df_with_emotion
+                    st.session_state['emotion_analyzer'] = emotion_analyzer
+                    st.session_state['analysis_mode'] = analysis_mode
+                    
+                    progress_bar.progress(100)
+                    status_text.text("感情分析が完了しました！")
+                    
+                    st.success("感情分析が完了しました！結果を表示します。")
+                    
+                except Exception as e:
+                    st.error(f"感情分析中にエラーが発生しました: {str(e)}")
+                    st.info("""
+                    **トラブルシューティング:**
+                    1. インターネット接続を確認してください
+                    2. 軽量モードを試してください
+                    3. データ量が多い場合は、ファイルを分割して試してください
+                    4. ブラウザを更新して再試行してください
+                    """)
+                    # エラー時はセッション状態をクリア
+                    if 'emotion_results' in st.session_state:
+                        del st.session_state['emotion_results']
+                    if 'emotion_analyzer' in st.session_state:
+                        del st.session_state['emotion_analyzer']
+                    if 'emotion_analysis_confirmed' in st.session_state:
+                        del st.session_state['emotion_analysis_confirmed']
+                    if 'analysis_mode' in st.session_state:
+                        del st.session_state['analysis_mode']
+        else:
+            st.warning("感情分析を実行するには、「実行を確認」ボタンをクリックしてください。")
+
     # 感情分析結果の表示
     if 'emotion_results' in st.session_state and 'emotion_analyzer' in st.session_state:
         df_with_emotion = st.session_state['emotion_results']
         emotion_analyzer = st.session_state['emotion_analyzer']
+        
+        # 分析モードの表示
+        if 'analysis_mode' in st.session_state:
+            mode = st.session_state['analysis_mode']
+            if "軽量モード" in mode:
+                st.info("🔍 軽量モードで分析しました（キーワードベース）")
+            else:
+                st.info("🤖 標準モードで分析しました（AIモデル使用）")
         
         if 'positive' in df_with_emotion.columns:
             # 感情統計情報を取得
